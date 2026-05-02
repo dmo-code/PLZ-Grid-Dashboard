@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="PLZ Grid Dashboard App Icon">
+  <defs>
+    <linearGradient id="surface" x1="184" x2="840" y1="150" y2="884" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#fbfcff"/>
+    </linearGradient>
+    <linearGradient id="pin" x1="392" x2="666" y1="254" y2="654" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6f8cff"/>
+      <stop offset="0.48" stop-color="#5473f0"/>
+      <stop offset="1" stop-color="#3157ea"/>
+    </linearGradient>
+    <linearGradient id="mapLine" x1="252" x2="768" y1="524" y2="746" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#d6def7"/>
+      <stop offset="0.55" stop-color="#bec9ef"/>
+      <stop offset="1" stop-color="#d6def7"/>
+    </linearGradient>
+    <filter id="cardShadow" x="-18%" y="-18%" width="136%" height="136%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="30" stdDeviation="42" flood-color="#0e1d32" flood-opacity="0.12"/>
+      <feDropShadow dx="0" dy="2" stdDeviation="8" flood-color="#0e1d32" flood-opacity="0.08"/>
+    </filter>
+    <filter id="pinShadow" x="-22%" y="-14%" width="144%" height="128%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#3157ea" flood-opacity="0.2"/>
+    </filter>
+    <clipPath id="cardClip">
+      <rect x="122" y="110" width="780" height="804" rx="164"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1024" height="1024" fill="#ffffff"/>
+  <g filter="url(#cardShadow)">
+    <rect x="122" y="110" width="780" height="804" rx="164" fill="url(#surface)"/>
+    <rect x="123" y="111" width="778" height="802" rx="163" fill="none" stroke="#eef1f8" stroke-width="2"/>
+  </g>
+
+  <g clip-path="url(#cardClip)">
+    <path d="M286 678 360 540c18-34 43-50 81-50h142c38 0 63 16 81 50l74 138c22 40-8 90-54 90H340c-46 0-76-50-54-90Z" fill="none" stroke="url(#mapLine)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M338 626h170M516 626h170M512 618v150" fill="none" stroke="#c9d3f3" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g filter="url(#pinShadow)">
+    <path d="M512 246c-91 0-166 73-166 164 0 128 125 256 150 281 9 9 23 9 32 0 25-25 150-153 150-281 0-91-75-164-166-164Z" fill="url(#pin)"/>
+    <circle cx="512" cy="398" r="56" fill="#ffffff"/>
+  </g>
+</svg>
