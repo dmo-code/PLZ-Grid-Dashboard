@@ -15,7 +15,9 @@ export const DEFAULT_WIDGETS: WidgetLayout[] = [
   { id: "moon", enabled: true, size: "mini" },
   { id: "water", enabled: true, size: "mini" },
   { id: "strom", enabled: true, size: "mini" },
-  { id: "insights", enabled: true, size: "mini" }
+  { id: "insights", enabled: true, size: "mini" },
+  { id: "wind", enabled: false, size: "compact" },
+  { id: "humidity", enabled: false, size: "compact" }
 ];
 
 const widgetIds = new Set<WidgetId>(DEFAULT_WIDGETS.map((widget) => widget.id));
@@ -26,7 +28,7 @@ export function loadSettings(): DashboardSettings {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return { postalCode: "10115", theme: DEFAULT_THEME, widgets: DEFAULT_WIDGETS };
+      return { postalCode: "10115", theme: DEFAULT_THEME, widgets: DEFAULT_WIDGETS, huntMode: false };
     }
 
     const parsed = JSON.parse(raw) as Partial<DashboardSettings>;
@@ -45,10 +47,11 @@ export function loadSettings(): DashboardSettings {
         id: widget.id,
         enabled: widget.enabled,
         size: ["mini", "compact", "wide", "tall", "large", "full"].includes(widget.size) ? widget.size : "compact"
-      }))
+      })),
+      huntMode: parsed.huntMode === true
     };
   } catch {
-    return { postalCode: "10115", theme: DEFAULT_THEME, widgets: DEFAULT_WIDGETS };
+    return { postalCode: "10115", theme: DEFAULT_THEME, widgets: DEFAULT_WIDGETS, huntMode: false };
   }
 }
 

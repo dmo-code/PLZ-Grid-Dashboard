@@ -273,7 +273,8 @@ async function getWeather(location: LocationInfo): Promise<WeatherData> {
       "apparent_temperature",
       "precipitation",
       "weather_code",
-      "wind_speed_10m"
+      "wind_speed_10m",
+      "wind_direction_10m"
     ].join(","),
     hourly: ["temperature_2m", "precipitation_probability", "weather_code"].join(","),
     daily: [
@@ -300,7 +301,8 @@ async function getWeather(location: LocationInfo): Promise<WeatherData> {
       humidity: numberOrNull(data.current?.relative_humidity_2m),
       precipitation: numberOrNull(data.current?.precipitation),
       weatherCode: numberOrNull(data.current?.weather_code),
-      windSpeed: numberOrNull(data.current?.wind_speed_10m)
+      windSpeed: numberOrNull(data.current?.wind_speed_10m),
+      windDirection: numberOrNull(data.current?.wind_direction_10m)
     },
     hourly: {
       time: data.hourly?.time ?? [],

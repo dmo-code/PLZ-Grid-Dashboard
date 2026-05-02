@@ -11,7 +11,9 @@ export type WidgetId =
   | "ubaAir"
   | "water"
   | "strom"
-  | "moon";
+  | "moon"
+  | "wind"
+  | "humidity";
 
 export type WidgetSize = "mini" | "compact" | "wide" | "tall" | "large" | "full";
 export type ThemeMode = "system" | "standard" | "dark";
@@ -26,6 +28,7 @@ export type DashboardSettings = {
   postalCode: string;
   theme: ThemeMode;
   widgets: WidgetLayout[];
+  huntMode: boolean;
 };
 
 export type LocationInfo = {
@@ -56,6 +59,7 @@ export type WeatherData = {
     precipitation: number | null;
     weatherCode: number | null;
     windSpeed: number | null;
+    windDirection: number | null;
   };
   hourly: {
     time: string[];

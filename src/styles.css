@@ -569,6 +569,48 @@ h1 {
   font-weight: 800;
 }
 
+.hunt-mode-toggle {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(139, 69, 19, 0.12);
+  margin-bottom: 12px;
+}
+
+.theme-dark .hunt-mode-toggle {
+  background: rgba(139, 69, 19, 0.2);
+}
+
+.hunt-mode-toggle span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.hunt-mode-toggle input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #8B4513;
+}
+
+.hunt-mode-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #8B4513;
+  color: white;
+  font-weight: 700;
+  font-size: 0.85rem;
+  margin-left: 8px;
+}
+
 .settings-overlay {
   position: fixed;
   inset: 0;

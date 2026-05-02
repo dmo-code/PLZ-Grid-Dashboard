@@ -28,7 +28,9 @@ const widgetMeta: Record<WidgetId, { title: string; accent: string }> = {
   moon: { title: "Mond", accent: "moon" },
   water: { title: "Pegel", accent: "water" },
   strom: { title: "StromGedacht", accent: "energy" },
-  insights: { title: "Smart Insights", accent: "violet" }
+  insights: { title: "Smart Insights", accent: "violet" },
+  wind: { title: "Wind", accent: "sky" },
+  humidity: { title: "Luftfeuchte", accent: "water" }
 };
 
 const weatherLabels = new Map<number, string>([
@@ -56,10 +58,11 @@ const weatherLabels = new Map<number, string>([
 const widgetCategories = [
   { id: "context", title: "Standort & Kontext", ids: ["place"] as WidgetId[] },
   { id: "weather", title: "Wetter", ids: ["weather", "dwdWeather", "warnings"] as WidgetId[] },
-  { id: "air", title: "Luft & Umwelt", ids: ["pollen", "dwdPollen", "air", "ubaAir"] as WidgetId[] },
+  { id: "air", title: "Luft & Umwelt", ids: ["pollen", "dwdPollen", "air", "ubaAir", "humidity"] as WidgetId[] },
   { id: "sunMoon", title: "Sonne & Mond", ids: ["sun", "moon"] as WidgetId[] },
   { id: "waterEnergy", title: "Wasser & Energie", ids: ["water", "strom"] as WidgetId[] },
-  { id: "insights", title: "Smart Insights", ids: ["insights"] as WidgetId[] }
+  { id: "insights", title: "Smart Insights", ids: ["insights"] as WidgetId[] },
+  { id: "hunt", title: "Jagd", ids: ["moon", "weather", "sun", "warnings", "air", "pollen", "wind", "humidity"] as WidgetId[] }
 ];
 
 function App() {
@@ -83,10 +86,26 @@ function App() {
   const [systemPrefersDark, setSystemPrefersDark] = useState(() => {
     return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
+  const [huntMode, setHuntMode] = useState(settings.huntMode);
 
   useEffect(() => {
     saveSettings(settings);
   }, [settings]);
+
+  useEffect(() => {
+    if (huntMode !== settings.huntMode) {
+      if (huntMode) {
+        const huntWidgetIds = new Set(widgetCategories.find(c => c.id === "hunt")?.ids ?? []);
+        const newWidgets = settings.widgets.map(w => ({
+          ...w,
+          enabled: huntWidgetIds.has(w.id)
+        }));
+        setSettings(current => ({ ...current, widgets: newWidgets, huntMode: true }));
+      } else {
+        setSettings(current => ({ ...current, huntMode: false }));
+      }
+    }
+  }, [huntMode, settings, setSettings]);
 
   useEffect(() => {
     void refresh(settings.postalCode);
@@ -266,7 +285,10 @@ function App() {
         <div>
           <p className="eyebrow">Kostenlose Datenquellen · ohne Login</p>
           <h1>PLZ Grid Dashboard</h1>
-          <p className="weather-mood">{weatherTheme.label}</p>
+          <p className="weather-mood">
+            {weatherTheme.label}
+            {settings.huntMode && <span className="hunt-mode-indicator">🦌 Jagd</span>}
+          </p>
         </div>
         <div className="top-actions">
           <form
@@ -337,6 +359,8 @@ function App() {
         <WidgetSettingsPanel
           widgets={settings.widgets}
           theme={settings.theme}
+          huntMode={huntMode}
+          onHuntModeChange={setHuntMode}
           onClose={() => setSettingsOpen(false)}
           onMoveTo={moveWidgetTo}
           onUpdate={updateWidget}
@@ -400,6 +424,8 @@ function App() {
 function WidgetSettingsPanel({
   widgets,
   theme,
+  huntMode,
+  onHuntModeChange,
   onClose,
   onMoveTo,
   onUpdate,
@@ -407,6 +433,8 @@ function WidgetSettingsPanel({
 }: {
   widgets: WidgetLayout[];
   theme: ThemeMode;
+  huntMode: boolean;
+  onHuntModeChange: (huntMode: boolean) => void;
   onClose: () => void;
   onMoveTo: (id: WidgetId, targetId: WidgetId, position: DropPosition) => void;
   onUpdate: (id: WidgetId, patch: Partial<WidgetLayout>) => void;
@@ -447,6 +475,14 @@ function WidgetSettingsPanel({
             <option value="standard">Standard</option>
             <option value="dark">Dark</option>
           </select>
+        </label>
+        <label className="hunt-mode-toggle">
+          <span>Jagd-Modus</span>
+          <input
+            type="checkbox"
+            checked={huntMode}
+            onChange={(event) => onHuntModeChange(event.target.checked)}
+          />
         </label>
         <section className="config-panel">
           {widgetCategories.map((category) => {
@@ -619,6 +655,42 @@ function renderWidget(id: WidgetId, data: DashboardData) {
       return <StromWidget data={data} />;
     case "insights":
       return <InsightsWidget data={data} />;
+    case "wind": {
+      const windSpeed = data.weather.current.windSpeed;
+      const windDirection = data.weather.current.windDirection ?? 0;
+      if (windSpeed === null) return <p className="empty">Keine Daten</p>;
+      const windDirections = ["N", "NNO", "NO", "ONO", "O", "OSO", "SO", "SSO", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+      const dirIndex = Math.round(windDirection / 22.5) % 16;
+      const dirLabel = windDirections[dirIndex];
+      return (
+        <>
+          <div style={{ textAlign: "center", fontSize: "3rem", transform: `rotate(${windDirection}deg)`, display: "inline-block", width: "100%", transition: "transform 0.3s ease" }}>
+            ↓
+          </div>
+          <div style={{ textAlign: "center", fontSize: "1.4rem", fontWeight: 800, marginTop: "12px" }}>
+            {windSpeed.toFixed(1)} m/s
+          </div>
+          <div style={{ textAlign: "center", color: "var(--muted)", fontSize: "0.95rem", marginTop: "6px" }}>
+            {dirLabel}
+          </div>
+        </>
+      );
+    }
+    case "humidity": {
+      const humidity = data.weather.current.humidity;
+      if (humidity === null) return <p className="empty">Keine Daten</p>;
+      return (
+        <>
+          <div style={{ textAlign: "center", fontSize: "3rem" }}>💧</div>
+          <div style={{ textAlign: "center", fontSize: "2.2rem", fontWeight: 800, marginTop: "12px" }}>
+            {Math.round(humidity)}%
+          </div>
+          <div style={{ textAlign: "center", color: "var(--muted)", fontSize: "0.9rem", marginTop: "6px" }}>
+            Luftfeuchte
+          </div>
+        </>
+      );
+    }
   }
 }
 
