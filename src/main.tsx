@@ -428,6 +428,7 @@ function WidgetFrame({
   children: React.ReactNode;
 }) {
   const widgetRef = useRef<HTMLElement | null>(null);
+  const bodyRef = useRef<HTMLDivElement | null>(null);
   const dropClass = dragState?.overId === widget.id ? `drop-${dragState.position}` : "";
   const targetHeight = widget.customHeight ?? measuredHeight ?? getDefaultHeight(widget.size);
   const widgetStyle: React.CSSProperties = {
@@ -440,12 +441,23 @@ function WidgetFrame({
     if (!element) return;
 
     const reportHeight = () => {
-      onMeasuredHeight(widget.id, Math.ceil(Math.max(element.getBoundingClientRect().height, element.scrollHeight)));
+      const body = bodyRef.current;
+      const styles = window.getComputedStyle(element);
+      const paddingTop = Number.parseFloat(styles.paddingTop) || 0;
+      const paddingBottom = Number.parseFloat(styles.paddingBottom) || 0;
+      const borderTop = Number.parseFloat(styles.borderTopWidth) || 0;
+      const borderBottom = Number.parseFloat(styles.borderBottomWidth) || 0;
+      const gap = Number.parseFloat(styles.rowGap) || Number.parseFloat(styles.gap) || 0;
+      const headingHeight = element.querySelector<HTMLElement>(".widget-heading")?.offsetHeight ?? 0;
+      const bodyHeight = body ? Math.max(body.scrollHeight, body.getBoundingClientRect().height) : 0;
+      const contentHeight = paddingTop + borderTop + headingHeight + gap + bodyHeight + paddingBottom + borderBottom;
+      onMeasuredHeight(widget.id, Math.ceil(Math.max(element.getBoundingClientRect().height, element.scrollHeight, contentHeight)) + 8);
     };
     reportHeight();
 
     const observer = new ResizeObserver(reportHeight);
     observer.observe(element);
+    if (bodyRef.current) observer.observe(bodyRef.current);
     return () => observer.disconnect();
   }, [onMeasuredHeight, widget.id]);
 
@@ -467,7 +479,9 @@ function WidgetFrame({
         </div>
         <span>{sizeLabel(widget.size)}</span>
       </div>
-      <div className="widget-body">{children}</div>
+      <div className="widget-body" ref={bodyRef}>
+        {children}
+      </div>
       <button
         className="resize-handle"
         type="button"
