@@ -56,6 +56,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [locationChoices, setLocationChoices] = useState<LocationChoice[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const [dragState, setDragState] = useState<{
     id: WidgetId;
     overId?: WidgetId;
@@ -72,17 +73,14 @@ function App() {
   }, []);
 
   useEffect(() => {
-    function scrollToTopFromViewportTop(event: PointerEvent | TouchEvent) {
-      const point = "changedTouches" in event ? event.changedTouches[0] : event;
-      if (!point || window.scrollY <= 0 || point.clientY > 44) return;
-      window.scrollTo({ top: 0, behavior: "smooth" });
+    function updateScrollTopVisibility() {
+      setShowScrollTop(window.scrollY > 420);
     }
 
-    window.addEventListener("pointerup", scrollToTopFromViewportTop);
-    window.addEventListener("touchend", scrollToTopFromViewportTop, { passive: true });
+    updateScrollTopVisibility();
+    window.addEventListener("scroll", updateScrollTopVisibility, { passive: true });
     return () => {
-      window.removeEventListener("pointerup", scrollToTopFromViewportTop);
-      window.removeEventListener("touchend", scrollToTopFromViewportTop);
+      window.removeEventListener("scroll", updateScrollTopVisibility);
     };
   }, []);
 
@@ -302,6 +300,14 @@ function App() {
       <footer>
         Daten: OpenPLZ, Zippopotam.us, Open-Meteo, Bright Sky/DWD, DWD Open Data, UBA, PEGELONLINE, StromGedacht und lokale SunCalc-Mondberechnung.
       </footer>
+      <button
+        className={`scroll-top-button ${showScrollTop ? "visible" : ""}`}
+        type="button"
+        aria-label="Nach oben scrollen"
+        onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+      >
+        ↑
+      </button>
       </div>
     </main>
   );

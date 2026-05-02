@@ -1153,6 +1153,44 @@ footer {
   font-size: 0.9rem;
 }
 
+.scroll-top-button {
+  position: fixed;
+  right: max(18px, env(safe-area-inset-right, 0px) + 18px);
+  bottom: max(18px, env(safe-area-inset-bottom, 0px) + 18px);
+  z-index: 15;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border: 1px solid rgba(22, 32, 27, 0.14);
+  border-radius: 999px;
+  background: #17241e;
+  color: #fffef9;
+  box-shadow: 0 14px 34px rgba(17, 27, 22, 0.24);
+  font-size: 1.6rem;
+  font-weight: 900;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(12px) scale(0.94);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease,
+    background 160ms ease;
+}
+
+.scroll-top-button.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.scroll-top-button:hover,
+.scroll-top-button:focus-visible {
+  background: #24362e;
+}
+
 @media (max-width: 960px) {
   .topbar,
   .status-strip {
