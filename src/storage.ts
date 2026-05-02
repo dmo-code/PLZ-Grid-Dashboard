@@ -41,8 +41,7 @@ export function loadSettings(): DashboardSettings {
       widgets: merged.map((widget) => ({
         id: widget.id,
         enabled: widget.enabled,
-        size: ["mini", "compact", "wide", "tall", "large", "full"].includes(widget.size) ? widget.size : "compact",
-        customHeight: typeof widget.customHeight === "number" ? widget.customHeight : undefined
+        size: ["mini", "compact", "wide", "tall", "large", "full"].includes(widget.size) ? widget.size : "compact"
       }))
     };
   } catch {

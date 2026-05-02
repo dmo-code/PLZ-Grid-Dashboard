@@ -112,7 +112,7 @@ function App() {
     for (const widget of enabledWidgets) {
       const span = Math.min(getMasonrySpan(widget.size), columns);
       const element = widgetRefs.current.get(widget.id);
-      const measuredHeight = element ? Math.ceil(element.getBoundingClientRect().height) : widget.customHeight ?? getDefaultHeight(widget.size);
+      const measuredHeight = element ? Math.ceil(element.getBoundingClientRect().height) : getDefaultHeight(widget.size);
       let column = 0;
       let top = 0;
 
@@ -237,30 +237,6 @@ function App() {
     });
   }
 
-  function startWidgetResize(event: React.PointerEvent<HTMLButtonElement>, id: WidgetId, widget: WidgetLayout) {
-    event.preventDefault();
-    event.stopPropagation();
-    const startY = event.clientY;
-    const widgetElement = event.currentTarget.closest<HTMLElement>(".widget");
-    const initialHeight = widgetElement?.getBoundingClientRect().height ?? widget.customHeight ?? getDefaultHeight(widget.size);
-
-    function updateFromPointer(pointerEvent: PointerEvent) {
-      const deltaY = pointerEvent.clientY - startY;
-      const newHeight = Math.max(150, Math.round(initialHeight + deltaY));
-      updateWidget(id, { customHeight: newHeight });
-    }
-
-    function stopResize() {
-      window.removeEventListener("pointermove", updateFromPointer);
-      window.removeEventListener("pointerup", stopResize);
-      document.body.classList.remove("is-resizing-widget");
-    }
-
-    document.body.classList.add("is-resizing-widget");
-    window.addEventListener("pointermove", updateFromPointer);
-    window.addEventListener("pointerup", stopResize, { once: true });
-  }
-
   return (
     <main className={`app-shell ${weatherTheme.className}`}>
       <div className="weather-backdrop" aria-hidden="true" />
@@ -376,7 +352,6 @@ function App() {
                 setDragState(null);
               }}
               onDragEnd={() => setDragState(null)}
-              onResizeStart={(event) => startWidgetResize(event, widget.id, widget)}
             >
               {renderWidget(widget.id, data)}
             </WidgetFrame>
@@ -499,7 +474,6 @@ function WidgetFrame({
   onDragOver,
   onDrop,
   onDragEnd,
-  onResizeStart,
   children
 }: {
   widget: WidgetLayout;
@@ -510,7 +484,6 @@ function WidgetFrame({
   onDragOver: (event: React.DragEvent<HTMLElement>) => void;
   onDrop: (event: React.DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
-  onResizeStart: (event: React.PointerEvent<HTMLButtonElement>, widget: WidgetLayout) => void;
   children: React.ReactNode;
 }) {
   const dropClass = dragState?.overId === widget.id ? `drop-${dragState.position}` : "";
@@ -521,8 +494,7 @@ function WidgetFrame({
           width: `${layout.width}px`,
           transform: `translate3d(${layout.left}px, ${layout.top}px, 0)`
         }
-      : {}),
-    ...(widget.customHeight ? { height: `${widget.customHeight}px`, minHeight: `${widget.customHeight}px` } : {})
+      : {})
   };
 
   return (
@@ -544,13 +516,6 @@ function WidgetFrame({
         <span>{sizeLabel(widget.size)}</span>
       </div>
       <div className="widget-body">{children}</div>
-      <button
-        className="resize-handle"
-        type="button"
-        aria-label={`${widgetMeta[widget.id].title} Höhe mit der Maus ändern`}
-        draggable={false}
-        onPointerDown={(event) => onResizeStart(event, widget)}
-      />
     </article>
   );
 }

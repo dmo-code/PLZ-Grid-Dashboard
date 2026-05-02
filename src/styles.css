@@ -601,63 +601,6 @@ h1 {
   cursor: grabbing;
 }
 
-.resize-handle {
-  position: absolute;
-  bottom: 0;
-  left: 16px;
-  right: 16px;
-  width: auto;
-  height: 18px;
-  background: transparent;
-  cursor: ns-resize;
-  opacity: 0;
-  transform: translateY(4px);
-  transition:
-    opacity 140ms ease,
-    transform 140ms ease;
-}
-
-.widget.mini .resize-handle {
-  left: 12px;
-  right: 12px;
-  height: 16px;
-}
-
-.resize-handle::before {
-  position: absolute;
-  inset: 0;
-  border-radius: 999px 999px 0 0;
-  background:
-    linear-gradient(90deg, transparent, rgba(23, 36, 30, 0.12), transparent),
-    linear-gradient(180deg, transparent 0 8px, rgba(23, 36, 30, 0.5) 8px 11px, transparent 11px);
-  content: "";
-}
-
-.widget:hover .resize-handle,
-.resize-handle:focus-visible,
-.is-resizing-widget .resize-handle {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-@media (hover: none) {
-  .widget:hover .resize-handle {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-
-  .is-resizing-widget .resize-handle {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.is-resizing-widget,
-.is-resizing-widget * {
-  cursor: ns-resize !important;
-  user-select: none;
-}
-
 .hero-metric {
   display: grid;
   gap: 4px;

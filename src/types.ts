@@ -19,7 +19,6 @@ export type WidgetLayout = {
   id: WidgetId;
   enabled: boolean;
   size: WidgetSize;
-  customHeight?: number; // in pixels, optional custom height
 };
 
 export type DashboardSettings = {
