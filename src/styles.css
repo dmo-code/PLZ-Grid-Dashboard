@@ -590,7 +590,6 @@ h1 {
   display: grid;
   min-width: 0;
   gap: inherit;
-  overflow: hidden;
 }
 
 .drag-grip {
@@ -634,10 +633,7 @@ h1 {
   right: 16px;
   width: auto;
   height: 18px;
-  border-radius: 999px 999px 0 0;
-  background:
-    linear-gradient(90deg, transparent, rgba(23, 36, 30, 0.12), transparent),
-    linear-gradient(180deg, transparent 0 8px, rgba(23, 36, 30, 0.5) 8px 11px, transparent 11px);
+  background: transparent;
   cursor: ns-resize;
   opacity: 0;
   transform: translateY(4px);
@@ -652,11 +648,33 @@ h1 {
   height: 16px;
 }
 
+.resize-handle::before {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px 999px 0 0;
+  background:
+    linear-gradient(90deg, transparent, rgba(23, 36, 30, 0.12), transparent),
+    linear-gradient(180deg, transparent 0 8px, rgba(23, 36, 30, 0.5) 8px 11px, transparent 11px);
+  content: "";
+}
+
 .widget:hover .resize-handle,
 .resize-handle:focus-visible,
 .is-resizing-widget .resize-handle {
   opacity: 1;
   transform: translateY(0);
+}
+
+@media (hover: none) {
+  .widget:hover .resize-handle {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  .is-resizing-widget .resize-handle {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .is-resizing-widget,

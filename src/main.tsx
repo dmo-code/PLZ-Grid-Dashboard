@@ -1083,7 +1083,7 @@ function getDefaultHeight(size: WidgetSize): number {
 }
 
 function heightToGridSpan(height: number) {
-  return Math.max(1, Math.ceil((height + GRID_GAP) / (GRID_AUTO_ROW_HEIGHT + GRID_GAP)));
+  return Math.max(1, Math.ceil((height + GRID_GAP) / (GRID_AUTO_ROW_HEIGHT + GRID_GAP)) + 1);
 }
 
 function sizeLabel(size: WidgetSize) {
