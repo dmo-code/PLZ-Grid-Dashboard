@@ -1048,10 +1048,34 @@ footer {
   }
 }
 
+@media (max-width: 768px) {
+  h1 {
+    font-size: clamp(1.8rem, 5vw, 3.2rem);
+  }
+
+  .topbar {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .search {
+    width: 100%;
+  }
+}
+
 @media (max-width: 640px) {
   .shell {
     width: min(100% - 20px, 1220px);
-    padding-top: 20px;
+    padding: 16px 0 20px;
+  }
+
+  h1 {
+    font-size: clamp(1.6rem, 4.5vw, 2.8rem);
+  }
+
+  .eyebrow {
+    font-size: 0.75rem;
+    margin-bottom: 6px;
   }
 
   .search div,
@@ -1063,22 +1087,86 @@ footer {
 
   .top-actions {
     grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .search input,
+  .search button,
+  .settings-toggle {
+    min-height: 44px;
+    font-size: 16px; /* Prevents auto-zoom on iOS */
+  }
+
+  .search button,
+  .settings-toggle {
+    padding: 0 12px;
+  }
+
+  .status-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 20px 0 16px;
+  }
+
+  .status-strip div {
+    padding: 12px 14px;
+    gap: 4px;
+  }
+
+  .status-strip span {
+    font-size: 0.7rem;
   }
 
   .config-card {
-    grid-template-columns: minmax(0, 1fr) 108px auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 8px;
+    min-height: 54px;
+    padding: 8px 10px;
+  }
+
+  .config-card label {
+    font-size: 0.9rem;
+  }
+
+  .config-card select {
+    height: 32px;
+    font-size: 14px;
   }
 
   .settings-toggle {
     width: 100%;
+    min-width: auto;
   }
 
   .settings-panel {
-    padding: 18px 10px;
+    width: 100%;
+    padding: 16px 12px;
+    box-shadow: -16px 0 48px rgba(17, 27, 22, 0.16);
+  }
+
+  .settings-panel-header {
+    gap: 12px;
+  }
+
+  .settings-panel-header h2 {
+    font-size: 1.6rem;
+  }
+
+  .settings-panel-header button {
+    width: 38px;
+    min-height: 38px;
+    font-size: 1.4rem;
+  }
+
+  .order-controls button {
+    width: 32px;
+    min-height: 32px;
+    font-size: 0.95rem;
   }
 
   .dashboard-grid {
     grid-template-columns: 1fr;
+    gap: 12px;
   }
 
   .widget,
@@ -1088,9 +1176,131 @@ footer {
   .widget.full {
     grid-column: 1;
     min-height: auto;
+    padding: 16px;
+    gap: 16px;
+  }
+
+  .widget h2 {
+    font-size: 1rem;
+  }
+
+  .widget-heading {
+    gap: 10px;
+  }
+
+  .drag-grip {
+    width: 20px;
+    height: 20px;
   }
 
   .hero-metric strong {
-    font-size: 3.2rem;
+    font-size: 2.8rem;
+  }
+
+  .metric span {
+    font-size: 0.7rem;
+  }
+
+  .details {
+    gap: 10px;
+  }
+
+  .detail-item span {
+    font-size: 0.75rem;
+  }
+
+  footer {
+    margin-top: 16px;
+    font-size: 0.85rem;
+  }
+}
+
+/* Extra small devices (360px and below) */
+@media (max-width: 400px) {
+  .shell {
+    width: calc(100% - 16px);
+    padding: 12px 0 16px;
+  }
+
+  h1 {
+    font-size: clamp(1.4rem, 4vw, 2.4rem);
+  }
+
+  .topbar {
+    gap: 12px;
+  }
+
+  .status-strip {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    margin: 16px 0 12px;
+  }
+
+  .search input,
+  .search button,
+  .settings-toggle,
+  .config-card,
+  .widget {
+    border-radius: 6px;
+  }
+
+  .search input,
+  .search button,
+  .settings-toggle {
+    min-height: 40px;
+    padding: 0 10px;
+  }
+
+  .widget {
+    padding: 12px;
+    gap: 12px;
+    min-height: 200px;
+  }
+
+  .widget h2 {
+    font-size: 0.95rem;
+  }
+
+  .hero-metric strong {
+    font-size: 2.4rem;
+  }
+
+  .hero-metric small {
+    font-size: 0.9rem;
+  }
+
+  .widget-heading {
+    font-size: 0.9rem;
+    gap: 8px;
+  }
+
+  .config-card {
+    padding: 8px;
+    gap: 6px;
+    min-height: 50px;
+  }
+
+  .config-card label {
+    font-size: 0.85rem;
+  }
+
+  .config-card select {
+    height: 30px;
+    font-size: 13px;
+  }
+
+  .order-controls button {
+    width: 28px;
+    min-height: 28px;
+    font-size: 0.9rem;
+  }
+
+  .drag-grip {
+    width: 18px;
+    height: 18px;
+  }
+
+  .drag-grip::before {
+    background-image: radial-gradient(circle, #66756d 1px, transparent 1.3px);
   }
 }
