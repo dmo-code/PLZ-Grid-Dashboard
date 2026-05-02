@@ -1,0 +1,1165 @@
+import React, { useEffect, useMemo, useState } from "react";
+import { createRoot } from "react-dom/client";
+import { loadDashboardData } from "./api";
+import { loadSettings, saveSettings } from "./storage";
+import type { DashboardData, DashboardSettings, WidgetId, WidgetLayout, WidgetSize } from "./types";
+import "./styles.css";
+
+type DropPosition = "before" | "after";
+
+const widgetMeta: Record<WidgetId, { title: string; accent: string }> = {
+  place: { title: "PLZ-Kontext", accent: "slate" },
+  weather: { title: "Wetter", accent: "sky" },
+  dwdWeather: { title: "DWD Wetter", accent: "blue" },
+  pollen: { title: "Pollenflug", accent: "grass" },
+  dwdPollen: { title: "DWD Pollen", accent: "leaf" },
+  air: { title: "Luftqualität", accent: "mint" },
+  ubaAir: { title: "UBA Luftdaten", accent: "teal" },
+  warnings: { title: "Warnungen", accent: "amber" },
+  sun: { title: "Sonne", accent: "rose" },
+  moon: { title: "Mond", accent: "moon" },
+  water: { title: "Pegel", accent: "water" },
+  strom: { title: "StromGedacht", accent: "energy" },
+  insights: { title: "Smart Insights", accent: "violet" }
+};
+
+const weatherLabels = new Map<number, string>([
+  [0, "Klar"],
+  [1, "Überwiegend klar"],
+  [2, "Teils bewölkt"],
+  [3, "Bewölkt"],
+  [45, "Nebel"],
+  [48, "Reifnebel"],
+  [51, "Leichter Niesel"],
+  [53, "Niesel"],
+  [55, "Starker Niesel"],
+  [61, "Leichter Regen"],
+  [63, "Regen"],
+  [65, "Starker Regen"],
+  [71, "Leichter Schnee"],
+  [73, "Schnee"],
+  [75, "Starker Schnee"],
+  [80, "Regenschauer"],
+  [81, "Starke Schauer"],
+  [82, "Heftige Schauer"],
+  [95, "Gewitter"]
+]);
+
+function App() {
+  const [settings, setSettings] = useState<DashboardSettings>(() => loadSettings());
+  const [postalInput, setPostalInput] = useState(settings.postalCode);
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [dragState, setDragState] = useState<{
+    id: WidgetId;
+    overId?: WidgetId;
+    position?: DropPosition;
+  } | null>(null);
+
+  useEffect(() => {
+    saveSettings(settings);
+  }, [settings]);
+
+  useEffect(() => {
+    void refresh(settings.postalCode);
+  }, []);
+
+  const enabledWidgets = useMemo(() => settings.widgets.filter((widget) => widget.enabled), [settings.widgets]);
+  const weatherTheme = getWeatherTheme(data);
+
+  async function refresh(postalCode: string) {
+    if (!/^\d{5}$/.test(postalCode)) {
+      setError("Bitte gib eine fünfstellige deutsche PLZ ein.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const dashboardData = await loadDashboardData(postalCode);
+      setData(dashboardData);
+      setSettings((current) => ({ ...current, postalCode }));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Die Daten konnten nicht geladen werden.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function updateWidget(id: WidgetId, patch: Partial<WidgetLayout>) {
+    setSettings((current) => ({
+      ...current,
+      widgets: current.widgets.map((widget) => (widget.id === id ? { ...widget, ...patch } : widget))
+    }));
+  }
+
+  function moveWidget(id: WidgetId, direction: -1 | 1) {
+    setSettings((current) => {
+      const widgets = [...current.widgets];
+      const index = widgets.findIndex((widget) => widget.id === id);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= widgets.length) return current;
+      [widgets[index], widgets[nextIndex]] = [widgets[nextIndex], widgets[index]];
+      return { ...current, widgets };
+    });
+  }
+
+  function moveWidgetTo(id: WidgetId, targetId: WidgetId, position: DropPosition) {
+    if (id === targetId) return;
+    setSettings((current) => {
+      const widgets = [...current.widgets];
+      const fromIndex = widgets.findIndex((widget) => widget.id === id);
+      if (fromIndex < 0) return current;
+      const [movedWidget] = widgets.splice(fromIndex, 1);
+      const targetIndex = widgets.findIndex((widget) => widget.id === targetId);
+      if (targetIndex < 0) return current;
+      widgets.splice(position === "after" ? targetIndex + 1 : targetIndex, 0, movedWidget);
+      return { ...current, widgets };
+    });
+  }
+
+  function startWidgetResize(event: React.PointerEvent, id: WidgetId, size: WidgetSize) {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const initial = sizeToDimensions(size);
+
+    function updateFromPointer(pointerEvent: PointerEvent) {
+      const deltaX = pointerEvent.clientX - startX;
+      const deltaY = pointerEvent.clientY - startY;
+      const width = getResizedWidth(initial.width, deltaX);
+      const tall = width === "full" ? false : deltaY > 70 ? true : deltaY < -70 ? false : initial.tall;
+      updateWidget(id, { size: dimensionsToSize(width, tall) });
+    }
+
+    function stopResize() {
+      window.removeEventListener("pointermove", updateFromPointer);
+      window.removeEventListener("pointerup", stopResize);
+      document.body.classList.remove("is-resizing-widget");
+    }
+
+    document.body.classList.add("is-resizing-widget");
+    window.addEventListener("pointermove", updateFromPointer);
+    window.addEventListener("pointerup", stopResize, { once: true });
+  }
+
+  return (
+    <main className={`app-shell ${weatherTheme.className}`}>
+      <div className="weather-backdrop" aria-hidden="true" />
+      <div className="shell">
+      <header className="topbar">
+        <div>
+          <p className="eyebrow">Kostenlose Datenquellen · ohne Login</p>
+          <h1>PLZ Grid Dashboard</h1>
+          <p className="weather-mood">{weatherTheme.label}</p>
+        </div>
+        <div className="top-actions">
+          <form
+            className="search"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void refresh(postalInput.trim());
+            }}
+          >
+            <label htmlFor="postalCode">Postleitzahl</label>
+            <div>
+              <input
+                id="postalCode"
+                inputMode="numeric"
+                pattern="[0-9]{5}"
+                maxLength={5}
+                value={postalInput}
+                onChange={(event) => setPostalInput(event.target.value.replace(/\D/g, ""))}
+                placeholder="10115"
+              />
+              <button type="submit">Aktualisieren</button>
+            </div>
+          </form>
+          <button className="settings-toggle" type="button" onClick={() => setSettingsOpen(true)}>
+            Widgets
+          </button>
+        </div>
+      </header>
+
+      <section className="status-strip">
+        <div>
+          <span>Ort</span>
+          <strong>{data ? `${data.location.place}, ${data.location.state}` : "Noch nicht geladen"}</strong>
+        </div>
+        <div>
+          <span>Stand</span>
+          <strong>{data ? formatDateTime(data.updatedAt) : "Warte auf Daten"}</strong>
+        </div>
+        <div>
+          <span>Speicherung</span>
+          <strong>PLZ, Widgets und Layout lokal</strong>
+        </div>
+      </section>
+
+      {settingsOpen && (
+        <WidgetSettingsPanel
+          widgets={settings.widgets}
+          onClose={() => setSettingsOpen(false)}
+          onMove={moveWidget}
+          onUpdate={updateWidget}
+        />
+      )}
+
+      {error && <p className="message error">{error}</p>}
+      {loading && <p className="message">Daten werden geladen...</p>}
+
+      <section className="dashboard-grid" aria-label="Dashboard Widgets">
+        {data &&
+          enabledWidgets.map((widget) => (
+            <WidgetFrame
+              key={widget.id}
+              widget={widget}
+              dragState={dragState}
+              onDragStart={(event) => {
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text/plain", widget.id);
+                setDragState({ id: widget.id });
+              }}
+              onDragOver={(event) => {
+                if (!dragState || dragState.id === widget.id) return;
+                event.preventDefault();
+                const rect = event.currentTarget.getBoundingClientRect();
+                const isAfter = event.clientY > rect.top + rect.height / 2 || event.clientX > rect.left + rect.width / 2;
+                setDragState({ id: dragState.id, overId: widget.id, position: isAfter ? "after" : "before" });
+              }}
+              onDrop={(event) => {
+                event.preventDefault();
+                const draggedId = dragState?.id ?? (event.dataTransfer.getData("text/plain") as WidgetId);
+                if (draggedId && dragState?.position) moveWidgetTo(draggedId, widget.id, dragState.position);
+                setDragState(null);
+              }}
+              onDragEnd={() => setDragState(null)}
+              onResizeStart={(event) => startWidgetResize(event, widget.id, widget.size)}
+            >
+              {renderWidget(widget.id, data)}
+            </WidgetFrame>
+          ))}
+      </section>
+
+      <footer>
+        Daten: OpenPLZ, Zippopotam.us, Open-Meteo, Bright Sky/DWD, DWD Open Data, UBA, PEGELONLINE, StromGedacht und lokale SunCalc-Mondberechnung.
+      </footer>
+      </div>
+    </main>
+  );
+}
+
+function WidgetSettingsPanel({
+  widgets,
+  onClose,
+  onMove,
+  onUpdate
+}: {
+  widgets: WidgetLayout[];
+  onClose: () => void;
+  onMove: (id: WidgetId, direction: -1 | 1) => void;
+  onUpdate: (id: WidgetId, patch: Partial<WidgetLayout>) => void;
+}) {
+  return (
+    <div className="settings-overlay" role="presentation" onClick={onClose}>
+      <aside className="settings-panel" aria-label="Widget-Konfiguration" onClick={(event) => event.stopPropagation()}>
+        <div className="settings-panel-header">
+          <div>
+            <p className="eyebrow">Layout</p>
+            <h2>Widgets</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Widget-Konfiguration schließen">
+            ×
+          </button>
+        </div>
+        <section className="config-panel">
+          {widgets.map((widget, index) => (
+            <article key={widget.id} className="config-card">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={widget.enabled}
+                  onChange={(event) => onUpdate(widget.id, { enabled: event.target.checked })}
+                />
+                {widgetMeta[widget.id].title}
+              </label>
+              <select
+                value={widget.size}
+                onChange={(event) => onUpdate(widget.id, { size: event.target.value as WidgetSize })}
+                aria-label={`${widgetMeta[widget.id].title} Größe`}
+              >
+                <option value="compact">Kompakt</option>
+                <option value="wide">Breit</option>
+                <option value="tall">Hoch</option>
+                <option value="large">Groß</option>
+                <option value="full">Volle Breite</option>
+              </select>
+              <div className="order-controls">
+                <button type="button" onClick={() => onMove(widget.id, -1)} disabled={index === 0} aria-label="Nach links">
+                  ←
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onMove(widget.id, 1)}
+                  disabled={index === widgets.length - 1}
+                  aria-label="Nach rechts"
+                >
+                  →
+                </button>
+              </div>
+            </article>
+          ))}
+        </section>
+      </aside>
+    </div>
+  );
+}
+
+function WidgetFrame({
+  widget,
+  dragState,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+  onResizeStart,
+  children
+}: {
+  widget: WidgetLayout;
+  dragState: { id: WidgetId; overId?: WidgetId; position?: DropPosition } | null;
+  onDragStart: (event: React.DragEvent<HTMLElement>) => void;
+  onDragOver: (event: React.DragEvent<HTMLElement>) => void;
+  onDrop: (event: React.DragEvent<HTMLElement>) => void;
+  onDragEnd: () => void;
+  onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  children: React.ReactNode;
+}) {
+  const dropClass = dragState?.overId === widget.id ? `drop-${dragState.position}` : "";
+  return (
+    <article
+      className={`widget ${widget.size} ${widgetMeta[widget.id].accent} ${dragState?.id === widget.id ? "dragging" : ""} ${dropClass}`}
+      draggable
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+    >
+      <div className="widget-heading">
+        <div>
+          <span className="drag-grip" aria-hidden="true" />
+          <h2>{widgetMeta[widget.id].title}</h2>
+        </div>
+        <span>{sizeLabel(widget.size)}</span>
+      </div>
+      {children}
+      <button
+        className="resize-handle"
+        type="button"
+        aria-label={`${widgetMeta[widget.id].title} Größe mit der Maus ändern`}
+        draggable={false}
+        onPointerDown={onResizeStart}
+      />
+    </article>
+  );
+}
+
+function renderWidget(id: WidgetId, data: DashboardData) {
+  switch (id) {
+    case "place":
+      return <PlaceWidget data={data} />;
+    case "weather":
+      return <WeatherWidget data={data} />;
+    case "dwdWeather":
+      return <DwdWeatherWidget data={data} />;
+    case "pollen":
+      return <PollenWidget data={data} />;
+    case "dwdPollen":
+      return <DwdPollenWidget data={data} />;
+    case "air":
+      return <AirWidget data={data} />;
+    case "ubaAir":
+      return <UbaAirWidget data={data} />;
+    case "warnings":
+      return <WarningsWidget data={data} />;
+    case "sun":
+      return <SunWidget data={data} />;
+    case "moon":
+      return <MoonWidget data={data} />;
+    case "water":
+      return <WaterWidget data={data} />;
+    case "strom":
+      return <StromWidget data={data} />;
+    case "insights":
+      return <InsightsWidget data={data} />;
+  }
+}
+
+function PlaceWidget({ data }: { data: DashboardData }) {
+  const place = data.place;
+  if (!place) return <p className="empty">OpenPLZ-Daten sind für diese PLZ gerade nicht verfügbar.</p>;
+  return (
+    <div className="detail-list">
+      <Metric label="Ort" value={place.name} />
+      <Metric label="Gemeinde" value={place.municipality ?? "n/a"} />
+      <Metric label="Kreis" value={place.district ? `${place.districtType ?? "Kreis"} ${place.district}` : "n/a"} />
+      <Metric label="Bundesland" value={place.federalState ?? data.location.state} />
+    </div>
+  );
+}
+
+function WeatherWidget({ data }: { data: DashboardData }) {
+  const current = data.weather.current;
+  const nextHourIndexes = getUpcomingHourIndexes(data.weather.hourly.time, 8);
+  const dayHours = data.weather.hourly.time.slice(0, 24);
+  return (
+    <>
+      <div className="hero-metric">
+        <strong>{formatNumber(current.temperature, "°C")}</strong>
+        <span>{labelWeather(current.weatherCode)} · gefühlt {formatNumber(current.apparentTemperature, "°C")}</span>
+      </div>
+      <div className="metric-row">
+        <Metric label="Feuchte" value={formatNumber(current.humidity, "%")} />
+        <Metric label="Wind" value={formatNumber(current.windSpeed, " km/h")} />
+        <Metric label="Regen jetzt" value={formatNumber(current.precipitation, " mm")} />
+      </div>
+      <div className="hourly-strip-heading">
+        <strong>Nächste Stunden</strong>
+        <span>Temperatur · Regenchance</span>
+      </div>
+      <div className="spark-list">
+        {nextHourIndexes.map((hourIndex, position) => (
+          <div key={data.weather.hourly.time[hourIndex]}>
+            <span>{position === 0 ? "Jetzt" : formatHour(data.weather.hourly.time[hourIndex])}</span>
+            <strong>{formatNumber(data.weather.hourly.temperature[hourIndex], "°")}</strong>
+            <small>Regen {formatNumber(data.weather.hourly.precipitationProbability[hourIndex], "%")}</small>
+          </div>
+        ))}
+      </div>
+      <WeatherTrendChart
+        times={dayHours}
+        temperatures={data.weather.hourly.temperature.slice(0, 24)}
+        precipitation={data.weather.hourly.precipitationProbability.slice(0, 24)}
+      />
+    </>
+  );
+}
+
+function PollenWidget({ data }: { data: DashboardData }) {
+  const pollen = [
+    ["Erle", maxToday(data.air.hourly.time, data.air.hourly.alder)],
+    ["Birke", maxToday(data.air.hourly.time, data.air.hourly.birch)],
+    ["Gräser", maxToday(data.air.hourly.time, data.air.hourly.grass)],
+    ["Beifuß", maxToday(data.air.hourly.time, data.air.hourly.mugwort)],
+    ["Ambrosia", maxToday(data.air.hourly.time, data.air.hourly.ragweed)]
+  ] as const;
+  return <BarList items={pollen.map(([label, value]) => ({ label, value, detail: pollenLevel(value) }))} max={80} />;
+}
+
+function DwdWeatherWidget({ data }: { data: DashboardData }) {
+  const dwd = data.brightSky;
+  if (!dwd) return <p className="empty">Bright-Sky/DWD-Daten sind für diesen Ort gerade nicht verfügbar.</p>;
+  return (
+    <>
+      <div className="hero-metric">
+        <strong>{formatNumber(dwd.temperature, "°C")}</strong>
+        <span>
+          {translateCondition(dwd.condition)} · {dwd.stationName}
+        </span>
+      </div>
+      <div className="metric-row">
+        <Metric label="Böe" value={formatNumber(dwd.windGust, " km/h")} />
+        <Metric label="Sonne" value={formatNumber(dwd.sunshine, " min")} />
+        <Metric label="Solar" value={formatNumber(dwd.solar === null ? null : dwd.solar * 1000, " W/m²")} />
+      </div>
+      {dwd.alerts.length > 0 ? (
+        <div className="mini-list">
+          {dwd.alerts.map((alert) => (
+            <p key={alert.id}>{alert.headline}</p>
+          ))}
+        </div>
+      ) : (
+        <p className="empty">Keine Bright-Sky-DWD-Warnung am Standort.</p>
+      )}
+    </>
+  );
+}
+
+function DwdPollenWidget({ data }: { data: DashboardData }) {
+  const pollen = data.dwdPollen;
+  if (!pollen) return <p className="empty">DWD-Pollenflug-Gefahrenindex gerade nicht verfügbar.</p>;
+  return (
+    <>
+      <div className="source-line">
+        <strong>{pollen.partRegionName || pollen.regionName}</strong>
+        <span>{pollen.lastUpdate}</span>
+      </div>
+      <BarList
+        items={pollen.pollen.map((item) => ({
+          label: item.name,
+          value: pollenIndexValue(item.today),
+          detail: pollenHazardLabel(item.today)
+        }))}
+        max={3}
+      />
+      <PollenTrendChart pollen={pollen.pollen} />
+    </>
+  );
+}
+
+function AirWidget({ data }: { data: DashboardData }) {
+  const air = data.air.current;
+  return (
+    <>
+      <div className="hero-metric">
+        <strong>{air.europeanAqi ?? "n/a"}</strong>
+        <span>Europäischer AQI · {aqiLabel(air.europeanAqi)}</span>
+      </div>
+      <div className="metric-row">
+        <Metric label="PM10" value={formatNumber(air.pm10, " µg/m³")} />
+        <Metric label="PM2.5" value={formatNumber(air.pm25, " µg/m³")} />
+        <Metric label="Ozon" value={formatNumber(air.ozone, " µg/m³")} />
+      </div>
+    </>
+  );
+}
+
+function UbaAirWidget({ data }: { data: DashboardData }) {
+  const uba = data.ubaAir;
+  if (!uba) return <p className="empty">UBA-Luftdaten sind gerade nicht verfügbar.</p>;
+  return (
+    <>
+      <div className="source-line">
+        <strong>{uba.stationName}</strong>
+        <span>{formatDistance(uba.distance)} entfernt</span>
+      </div>
+      <div className="hero-metric">
+        <strong>{uba.totalIndex ?? "n/a"}</strong>
+        <span>Amtlicher Luftqualitätsindex · {ubaIndexLabel(uba.totalIndex)}</span>
+      </div>
+      <div className="metric-row">
+        {uba.components.slice(0, 3).map((component) => (
+          <Metric key={component.id} label={component.name} value={formatNumber(component.value, " µg/m³")} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function WarningsWidget({ data }: { data: DashboardData }) {
+  if (data.warnings.length === 0) {
+    return <p className="empty">Keine passenden aktiven DWD-Warnungen für Ort oder Bundesland gefunden.</p>;
+  }
+
+  return (
+    <div className="warning-list">
+      {data.warnings.map((warning) => (
+        <section key={warning.id} className={`warning level-${Math.min(warning.level, 4)}`}>
+          <strong>{warning.headline}</strong>
+          <span>{warning.regionName}</span>
+          <p>{warning.description}</p>
+          <small>
+            {formatEpoch(warning.start)} bis {formatEpoch(warning.end)}
+          </small>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function SunWidget({ data }: { data: DashboardData }) {
+  const today = data.weather.daily;
+  return (
+    <>
+      <div className="sun-times">
+        <div>
+          <span>Aufgang</span>
+          <strong>{formatHour(today.sunrise[0])}</strong>
+        </div>
+        <div>
+          <span>Untergang</span>
+          <strong>{formatHour(today.sunset[0])}</strong>
+        </div>
+      </div>
+      <div className="metric-row">
+        <Metric label="UV max" value={formatNumber(today.uvIndexMax[0], "")} />
+        <Metric label="Tagesmax" value={formatNumber(today.temperatureMax[0], "°C")} />
+        <Metric label="Tagesmin" value={formatNumber(today.temperatureMin[0], "°C")} />
+      </div>
+    </>
+  );
+}
+
+function MoonWidget({ data }: { data: DashboardData }) {
+  const moon = data.moon;
+  const illuminationPercent = Math.round(moon.illumination * 100);
+  const shadowOffset = getMoonShadowOffset(moon.illumination);
+  const isWaxing = moon.phase > 0 && moon.phase < 0.5;
+  return (
+    <>
+      <div className="moon-hero">
+        <div
+          className={`moon-visual ${isWaxing ? "waxing" : "waning"}`}
+          style={
+            {
+              "--moon-shadow-offset": `${shadowOffset}%`
+            } as React.CSSProperties
+          }
+          aria-label={`${moon.phaseName}, ${illuminationPercent} Prozent beleuchtet`}
+        >
+          <div className="moon-shadow" />
+        </div>
+        <div>
+          <strong>{moon.phaseName}</strong>
+          <span>{illuminationPercent}% beleuchtet · {isWaxing ? "zunehmend" : "abnehmend"}</span>
+        </div>
+      </div>
+      <div className="sun-times moon-times">
+        <div>
+          <span>Aufgang</span>
+          <strong>{formatMoonEvent(moon.rise, moon)}</strong>
+        </div>
+        <div>
+          <span>Untergang</span>
+          <strong>{formatMoonEvent(moon.set, moon)}</strong>
+        </div>
+      </div>
+      <div className="metric-row">
+        <Metric label="Höhe" value={`${Math.round(toDegrees(moon.altitude))}°`} />
+        <Metric label="Azimut" value={`${Math.round(toDegrees(moon.azimuth) + 180)}°`} />
+        <Metric label="Distanz" value={`${Math.round(moon.distance / 1000)} Tsd. km`} />
+      </div>
+    </>
+  );
+}
+
+function WaterWidget({ data }: { data: DashboardData }) {
+  const water = data.water;
+  if (!water) return <p className="empty">Kein PEGELONLINE-Pegel im näheren Umfeld gefunden.</p>;
+  return (
+    <>
+      <div className="hero-metric">
+        <strong>{formatNumber(water.value, ` ${water.unit}`)}</strong>
+        <span>{water.stationName}</span>
+      </div>
+      <div className="detail-list">
+        <Metric label="Gewässer" value={water.waterName} />
+        <Metric label="Entfernung" value={formatDistance(water.distance)} />
+        <Metric label="Status" value={translateWaterState(water.state)} />
+      </div>
+      <WaterLevelChart history={water.history} unit={water.unit} />
+    </>
+  );
+}
+
+function StromWidget({ data }: { data: DashboardData }) {
+  const strom = data.strom;
+  if (!strom) return <p className="empty">StromGedacht liefert für diese PLZ gerade keine Daten.</p>;
+  return (
+    <>
+      <div className="hero-metric">
+        <strong>{stromStateShort(strom.state)}</strong>
+        <span>{stromStateLabel(strom.state)}</span>
+      </div>
+      <div className="metric-row">
+        <Metric label="Last" value={formatNumber(strom.load, " MW")} />
+        <Metric label="Erneuerbar" value={formatNumber(strom.renewableEnergy, " MW")} />
+        <Metric label="Residuallast" value={formatNumber(strom.residualLoad, " MW")} />
+      </div>
+    </>
+  );
+}
+
+function InsightsWidget({ data }: { data: DashboardData }) {
+  return (
+    <ul className="insights">
+      {buildInsights(data).map((insight) => (
+        <li key={insight}>{insight}</li>
+      ))}
+    </ul>
+  );
+}
+
+function buildInsights(data: DashboardData) {
+  const insights: string[] = [];
+  const current = data.weather.current;
+  const today = data.weather.daily;
+  const pollenPeak = Math.max(
+    maxToday(data.air.hourly.time, data.air.hourly.birch) ?? 0,
+    maxToday(data.air.hourly.time, data.air.hourly.grass) ?? 0,
+    maxToday(data.air.hourly.time, data.air.hourly.ragweed) ?? 0
+  );
+
+  if ((current.windSpeed ?? 0) >= 45) insights.push("Wind im Blick behalten: Böen können lose Gegenstände bewegen.");
+  if ((today.precipitationSum[0] ?? 0) >= 8) insights.push("Regentag wahrscheinlich: Wege und Pendelzeiten großzügiger planen.");
+  if ((data.air.current.europeanAqi ?? 0) > 60) insights.push("Luftqualität ist mäßig bis schlecht: intensive Aktivitäten draußen eher verschieben.");
+  if (pollenPeak > 50) insights.push("Pollenbelastung hoch: Lüften eher nach Regen oder spät am Abend.");
+  if ((today.uvIndexMax[0] ?? 0) >= 6) insights.push("UV-Schutz einplanen, besonders um die Mittagszeit.");
+  if (data.warnings.length > 0) insights.push("Aktive DWD-Hinweise gefunden: Warnungswidget vor längeren Wegen prüfen.");
+  if (data.strom?.state === -1) insights.push("StromGedacht meldet Supergrün: flexible Verbraucher jetzt einplanen.");
+  if (data.water?.state === "high") insights.push("Der nächstgelegene Pegel meldet hohen Wasserstand.");
+  if (insights.length === 0) insights.push("Keine auffälligen Signale: Wetter, Luft und Pollen wirken aktuell unkritisch.");
+
+  return insights;
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function BarList({ items, max }: { items: Array<{ label: string; value: number | null; detail: string }>; max: number }) {
+  return (
+    <div className="bar-list">
+      {items.map((item) => (
+        <div key={item.label} className="bar-item">
+          <div>
+            <span>{item.label}</span>
+            <strong>{item.detail}</strong>
+          </div>
+          <meter min={0} max={max} value={item.value ?? 0} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WeatherTrendChart({
+  times,
+  temperatures,
+  precipitation
+}: {
+  times: string[];
+  temperatures: Array<number | null>;
+  precipitation: Array<number | null>;
+}) {
+  const tempValues = temperatures.filter((value): value is number => value !== null);
+  if (times.length === 0 || tempValues.length === 0) return null;
+  const min = Math.min(...tempValues);
+  const max = Math.max(...tempValues);
+  const chartMax = max === min ? min + 1 : max;
+  const tempPoints = temperatures
+    .map((value, index) => {
+      if (value === null) return null;
+      const x = scale(index, 0, Math.max(temperatures.length - 1, 1), 10, 290);
+      const y = scale(value, min, chartMax, 90, 18);
+      return { x, y, value, label: times[index] };
+    })
+    .filter((point): point is ChartPoint => point !== null);
+  const latestPoint = tempPoints.at(-1);
+  const peakPoint = tempPoints.reduce((peak, point) => (point.value > peak.value ? point : peak), tempPoints[0]);
+  const linePath = buildLinePath(tempPoints);
+  const areaPath = buildAreaPath(tempPoints, 96);
+  const nowMarkerX = getCurrentTimeMarkerX(times);
+
+  return (
+    <div className="chart-card">
+      <div className="chart-heading">
+        <strong>24h Verlauf</strong>
+        <span>
+          {Math.round(min)}° bis {Math.round(max)}°
+        </span>
+      </div>
+      <div className="chart-legend" aria-hidden="true">
+        <span className="legend-chip temperature">Temperatur</span>
+        <span className="legend-chip rain">Regenchance</span>
+      </div>
+      <svg className="trend-chart" viewBox="0 0 300 124" role="img" aria-label="Temperatur und Regenwahrscheinlichkeit für 24 Stunden">
+        <defs>
+          <linearGradient id="temperature-fill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#f0a339" stopOpacity="0.42" />
+            <stop offset="100%" stopColor="#f0a339" stopOpacity="0.04" />
+          </linearGradient>
+        </defs>
+        {[24, 52, 80].map((y) => (
+          <line key={y} className="chart-grid" x1="10" x2="290" y1={y} y2={y} />
+        ))}
+        <path className="chart-area temperature-area" d={areaPath} />
+        {nowMarkerX !== null ? (
+          <g className="now-marker">
+            <line x1={nowMarkerX} x2={nowMarkerX} y1="18" y2="100" />
+            <circle cx={nowMarkerX} cy="18" r="3.5" />
+            <text x={nowMarkerX} y="12" textAnchor="middle">
+              Jetzt
+            </text>
+          </g>
+        ) : null}
+        <g className="rain-bars">
+          {precipitation.map((value, index) => {
+            const height = scale(value ?? 0, 0, 100, 0, 32);
+            const x = scale(index, 0, Math.max(precipitation.length - 1, 1), 10, 286);
+            return <rect key={`${times[index]}-rain`} x={x - 3} y={99 - height} width="6" height={height} rx="3" />;
+          })}
+        </g>
+        <path className="chart-line temperature-line" d={linePath} />
+        {peakPoint ? <circle className="chart-dot peak-dot" cx={peakPoint.x} cy={peakPoint.y} r="4" /> : null}
+        {latestPoint ? <circle className="chart-dot current-dot" cx={latestPoint.x} cy={latestPoint.y} r="4.8" /> : null}
+        <text className="chart-axis" x="10" y="116">
+          {formatHour(times[0])}
+        </text>
+        <text className="chart-axis" x="290" y="116" textAnchor="end">
+          {formatHour(times[Math.min(23, times.length - 1)])}
+        </text>
+      </svg>
+    </div>
+  );
+}
+
+function PollenTrendChart({
+  pollen
+}: {
+  pollen: Array<{
+    name: string;
+    today: string;
+    tomorrow: string;
+    dayAfter: string;
+  }>;
+}) {
+  const visible = pollen.slice(0, 8);
+  return (
+    <div className="chart-card">
+      <div className="chart-heading">
+        <strong>Belastungstrend</strong>
+        <span>DWD Index 0-3</span>
+      </div>
+      <div className="pollen-matrix" role="img" aria-label="Pollenbelastung heute, morgen und übermorgen">
+        <div className="pollen-matrix-head">
+          <span />
+          <span>Heute</span>
+          <span>Morgen</span>
+          <span>+2</span>
+        </div>
+        {visible.map((item) => {
+          const values = [item.today, item.tomorrow, item.dayAfter];
+          return (
+            <div key={item.name} className="pollen-matrix-row">
+              <span>{item.name}</span>
+              {values.map((value, index) => (
+                <i key={`${item.name}-${index}`} className={`pollen-cell level-${pollenIndexValue(value)}`} title={pollenHazardLabel(value)}>
+                  {pollenIndexValue(value)}
+                </i>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function WaterLevelChart({
+  history,
+  unit
+}: {
+  history: Array<{
+    time: string;
+    value: number | null;
+  }>;
+  unit: string;
+}) {
+  const values = history.map((item) => item.value).filter((value): value is number => value !== null);
+  if (values.length < 2) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const chartMax = max === min ? min + 1 : max;
+  const waterPoints = history
+    .map((item, index) => {
+      if (item.value === null) return null;
+      const x = scale(index, 0, Math.max(history.length - 1, 1), 10, 290);
+      const y = scale(item.value, min, chartMax, 88, 18);
+      return { x, y, value: item.value, label: item.time };
+    })
+    .filter((point): point is ChartPoint => point !== null);
+  const latestPoint = waterPoints.at(-1);
+  const linePath = buildLinePath(waterPoints);
+  const areaPath = buildAreaPath(waterPoints, 96);
+
+  return (
+    <div className="chart-card">
+      <div className="chart-heading">
+        <strong>48h Pegel</strong>
+        <span>
+          {Math.round(min)}-{Math.round(max)} {unit}
+        </span>
+      </div>
+      <svg className="line-chart" viewBox="0 0 300 124" role="img" aria-label="Pegelverlauf der letzten 48 Stunden">
+        <defs>
+          <linearGradient id="water-fill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#2f89b8" stopOpacity="0.36" />
+            <stop offset="100%" stopColor="#2f89b8" stopOpacity="0.04" />
+          </linearGradient>
+        </defs>
+        {[24, 52, 80].map((y) => (
+          <line key={y} className="chart-grid" x1="10" x2="290" y1={y} y2={y} />
+        ))}
+        <path className="chart-area water-area" d={areaPath} />
+        <path className="chart-line water-line" d={linePath} />
+        {latestPoint ? <circle className="chart-dot water-dot" cx={latestPoint.x} cy={latestPoint.y} r="4.8" /> : null}
+        <text className="chart-axis" x="10" y="116">
+          {formatHour(history[0]?.time)}
+        </text>
+        <text className="chart-axis" x="290" y="116" textAnchor="end">
+          {formatHour(history[history.length - 1]?.time)}
+        </text>
+      </svg>
+    </div>
+  );
+}
+
+type ChartPoint = {
+  x: number;
+  y: number;
+  value: number;
+  label: string;
+};
+
+function buildLinePath(points: ChartPoint[]) {
+  return points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+}
+
+function buildAreaPath(points: ChartPoint[], baseline: number) {
+  if (points.length === 0) return "";
+  const first = points[0];
+  const last = points[points.length - 1];
+  return `${buildLinePath(points)} L ${last.x} ${baseline} L ${first.x} ${baseline} Z`;
+}
+
+function getCurrentTimeMarkerX(times: string[]) {
+  if (times.length < 2) return null;
+  const first = new Date(times[0]).getTime();
+  const last = new Date(times[times.length - 1]).getTime();
+  const now = Date.now();
+  if (!Number.isFinite(first) || !Number.isFinite(last) || now < first || now > last) return null;
+  return scale(now, first, last, 10, 290);
+}
+
+function getUpcomingHourIndexes(times: string[], count: number) {
+  const now = Date.now();
+  let currentIndex = -1;
+  for (let index = 0; index < times.length; index += 1) {
+    if (new Date(times[index]).getTime() <= now) currentIndex = index;
+  }
+  const startIndex = Math.max(currentIndex, 0);
+  return Array.from({ length: count }, (_, offset) => startIndex + offset).filter((index) => index < times.length);
+}
+
+type WidgetWidth = "compact" | "wide" | "full";
+
+function sizeToDimensions(size: WidgetSize): { width: WidgetWidth; tall: boolean } {
+  return {
+    width: size === "full" ? "full" : size === "wide" || size === "large" ? "wide" : "compact",
+    tall: size === "tall" || size === "large"
+  };
+}
+
+function dimensionsToSize(width: WidgetWidth, tall: boolean): WidgetSize {
+  if (width === "full") return "full";
+  if (width === "wide" && tall) return "large";
+  if (width === "wide") return "wide";
+  if (tall) return "tall";
+  return "compact";
+}
+
+function getResizedWidth(initial: WidgetWidth, deltaX: number): WidgetWidth {
+  const widths: WidgetWidth[] = ["compact", "wide", "full"];
+  const initialIndex = widths.indexOf(initial);
+  const steps = deltaX > 180 ? 2 : deltaX > 70 ? 1 : deltaX < -180 ? -2 : deltaX < -70 ? -1 : 0;
+  return widths[Math.min(Math.max(initialIndex + steps, 0), widths.length - 1)];
+}
+
+function sizeLabel(size: WidgetSize) {
+  const labels: Record<WidgetSize, string> = {
+    compact: "Kompakt",
+    wide: "Breit",
+    tall: "Hoch",
+    large: "Groß",
+    full: "Volle Breite"
+  };
+  return labels[size];
+}
+
+function maxToday(times: string[], values: Array<number | null>) {
+  const today = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Europe/Berlin",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date());
+  const todaysValues = values.filter((value, index) => times[index]?.startsWith(today) && value !== null) as number[];
+  return todaysValues.length ? Math.max(...todaysValues) : null;
+}
+
+function formatNumber(value: number | null | undefined, unit: string) {
+  if (value === null || value === undefined) return "n/a";
+  return `${Math.round(value)}${unit}`;
+}
+
+function formatHour(value: string) {
+  if (!value) return "n/a";
+  return new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+function formatMoonEvent(value: string | null, moon: DashboardData["moon"]) {
+  if (value) return formatHour(value);
+  if (moon.alwaysUp) return "immer oben";
+  if (moon.alwaysDown) return "nicht sichtbar";
+  return "n/a";
+}
+
+function formatDateTime(value: string | number) {
+  return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(value));
+}
+
+function formatEpoch(value: number) {
+  if (!value) return "n/a";
+  return formatDateTime(value > 10_000_000_000 ? value : value * 1000);
+}
+
+function labelWeather(code: number | null) {
+  return code === null ? "Unbekannt" : weatherLabels.get(code) ?? `Code ${code}`;
+}
+
+function aqiLabel(value: number | null) {
+  if (value === null) return "keine Angabe";
+  if (value <= 20) return "gut";
+  if (value <= 40) return "ordentlich";
+  if (value <= 60) return "mäßig";
+  if (value <= 80) return "schlecht";
+  if (value <= 100) return "sehr schlecht";
+  return "extrem";
+}
+
+function pollenLevel(value: number | null) {
+  if (value === null) return "keine Saisondaten";
+  if (value < 10) return "niedrig";
+  if (value < 50) return "mittel";
+  return "hoch";
+}
+
+function translateCondition(condition: string) {
+  const labels: Record<string, string> = {
+    dry: "Trocken",
+    fog: "Nebel",
+    rain: "Regen",
+    snow: "Schnee",
+    sleet: "Schneeregen",
+    hail: "Hagel",
+    thunderstorm: "Gewitter"
+  };
+  return labels[condition] ?? condition;
+}
+
+function pollenIndexValue(value: string) {
+  if (value === "-1") return 0;
+  if (value.includes("3")) return 3;
+  if (value.includes("2")) return 2;
+  if (value.includes("1")) return 1;
+  return 0;
+}
+
+function pollenHazardLabel(value: string) {
+  const labels: Record<string, string> = {
+    "0": "keine",
+    "0-1": "keine bis gering",
+    "1": "gering",
+    "1-2": "gering bis mittel",
+    "2": "mittel",
+    "2-3": "mittel bis hoch",
+    "3": "hoch"
+  };
+  return labels[value] ?? value;
+}
+
+function ubaIndexLabel(value: number | null) {
+  const labels: Record<number, string> = {
+    1: "sehr gut",
+    2: "gut",
+    3: "mäßig",
+    4: "schlecht",
+    5: "sehr schlecht"
+  };
+  return value ? labels[value] ?? "bewertet" : "keine Angabe";
+}
+
+function translateWaterState(value: string) {
+  const labels: Record<string, string> = {
+    low: "niedrig",
+    normal: "normal",
+    high: "hoch",
+    unknown: "unbekannt"
+  };
+  return labels[value] ?? value;
+}
+
+function stromStateShort(value: number | null) {
+  if (value === -1) return "Supergrün";
+  if (value === 1) return "Grün";
+  if (value === 3) return "Orange";
+  if (value === 4) return "Rot";
+  return "n/a";
+}
+
+function stromStateLabel(value: number | null) {
+  if (value === -1) return "Strom jetzt flexibel nutzen";
+  if (value === 1) return "Normalbetrieb";
+  if (value === 3) return "Verbrauch möglichst reduzieren";
+  if (value === 4) return "Strommangel vermeiden";
+  return "kein Status";
+}
+
+function formatDistance(value: number) {
+  if (value < 1) return `${Math.round(value * 1000)} m`;
+  return `${value.toFixed(1)} km`;
+}
+
+function toDegrees(value: number) {
+  return (value * 180) / Math.PI;
+}
+
+function getMoonShadowOffset(illumination: number) {
+  return Math.max(0, Math.min(112, illumination * 112));
+}
+
+function scale(value: number, inMin: number, inMax: number, outMin: number, outMax: number) {
+  if (inMax === inMin) return (outMin + outMax) / 2;
+  const ratio = (value - inMin) / (inMax - inMin);
+  return outMin + ratio * (outMax - outMin);
+}
+
+function getWeatherTheme(data: DashboardData | null) {
+  if (!data) return { className: "weather-loading", label: "Atmosphäre lädt mit den Wetterdaten" };
+
+  const code = data.weather.current.weatherCode;
+  const now = new Date();
+  const sunrise = data.weather.daily.sunrise[0] ? new Date(data.weather.daily.sunrise[0]) : null;
+  const sunset = data.weather.daily.sunset[0] ? new Date(data.weather.daily.sunset[0]) : null;
+  const isNight = Boolean(sunrise && sunset && (now < sunrise || now > sunset));
+
+  if (code === null) return { className: "weather-neutral", label: "Wetterlage nicht eindeutig" };
+  if ([95, 96, 99].includes(code)) return { className: "weather-storm", label: "Gewitterstimmung" };
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return { className: "weather-snow", label: "Schneelage" };
+  if ([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82].includes(code)) {
+    return { className: "weather-rain", label: "Regenlage" };
+  }
+  if ([45, 48].includes(code)) return { className: "weather-fog", label: "Nebelstimmung" };
+  if ([2, 3].includes(code)) return { className: "weather-clouds", label: "Wolkig" };
+  if (isNight) return { className: "weather-night", label: "Klare Nacht" };
+  return { className: "weather-clear", label: "Klares Wetter" };
+}
+
+createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
