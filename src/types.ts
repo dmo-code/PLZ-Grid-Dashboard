@@ -14,6 +14,7 @@ export type WidgetId =
   | "moon";
 
 export type WidgetSize = "mini" | "compact" | "wide" | "tall" | "large" | "full";
+export type ThemeMode = "system" | "standard" | "dark";
 
 export type WidgetLayout = {
   id: WidgetId;
@@ -23,6 +24,7 @@ export type WidgetLayout = {
 
 export type DashboardSettings = {
   postalCode: string;
+  theme: ThemeMode;
   widgets: WidgetLayout[];
 };
 

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { createRoot } from "react-dom/client";
 import { loadDashboardData, searchLocationChoices, type LocationChoice } from "./api";
 import { loadSettings, saveSettings } from "./storage";
-import type { DashboardData, DashboardSettings, WidgetId, WidgetLayout, WidgetSize } from "./types";
+import type { DashboardData, DashboardSettings, ThemeMode, WidgetId, WidgetLayout, WidgetSize } from "./types";
 import "./styles.css";
 
 type DropPosition = "before" | "after";
@@ -71,6 +71,9 @@ function App() {
   const widgetRefs = useRef(new Map<WidgetId, HTMLElement>());
   const [masonryLayout, setMasonryLayout] = useState<Partial<Record<WidgetId, MasonryItemLayout>>>({});
   const [masonryHeight, setMasonryHeight] = useState(0);
+  const [systemPrefersDark, setSystemPrefersDark] = useState(() => {
+    return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  });
 
   useEffect(() => {
     saveSettings(settings);
@@ -78,6 +81,14 @@ function App() {
 
   useEffect(() => {
     void refresh(settings.postalCode);
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const updatePreference = () => setSystemPrefersDark(media.matches);
+    updatePreference();
+    media.addEventListener("change", updatePreference);
+    return () => media.removeEventListener("change", updatePreference);
   }, []);
 
   useEffect(() => {
@@ -94,6 +105,7 @@ function App() {
 
   const enabledWidgets = useMemo(() => settings.widgets.filter((widget) => widget.enabled), [settings.widgets]);
   const weatherTheme = getWeatherTheme(data);
+  const activeTheme = settings.theme === "system" ? (systemPrefersDark ? "dark" : "standard") : settings.theme;
 
   const updateMasonryLayout = useCallback(() => {
     const dashboard = dashboardRef.current;
@@ -238,7 +250,7 @@ function App() {
   }
 
   return (
-    <main className={`app-shell ${weatherTheme.className}`}>
+    <main className={`app-shell ${weatherTheme.className} theme-${activeTheme}`}>
       <div className="weather-backdrop" aria-hidden="true" />
       <div className="shell">
       <header className="topbar">
@@ -315,9 +327,11 @@ function App() {
       {settingsOpen && (
         <WidgetSettingsPanel
           widgets={settings.widgets}
+          theme={settings.theme}
           onClose={() => setSettingsOpen(false)}
           onMoveTo={moveWidgetTo}
           onUpdate={updateWidget}
+          onThemeChange={(theme) => setSettings((current) => ({ ...current, theme }))}
         />
       )}
 
@@ -376,14 +390,18 @@ function App() {
 
 function WidgetSettingsPanel({
   widgets,
+  theme,
   onClose,
   onMoveTo,
-  onUpdate
+  onUpdate,
+  onThemeChange
 }: {
   widgets: WidgetLayout[];
+  theme: ThemeMode;
   onClose: () => void;
   onMoveTo: (id: WidgetId, targetId: WidgetId, position: DropPosition) => void;
   onUpdate: (id: WidgetId, patch: Partial<WidgetLayout>) => void;
+  onThemeChange: (theme: ThemeMode) => void;
 }) {
   const [settingsDragState, setSettingsDragState] = useState<{
     id: WidgetId;
@@ -403,6 +421,14 @@ function WidgetSettingsPanel({
             ×
           </button>
         </div>
+        <label className="theme-select">
+          <span>Theme</span>
+          <select value={theme} onChange={(event) => onThemeChange(event.target.value as ThemeMode)}>
+            <option value="system">System</option>
+            <option value="standard">Standard</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
         <section className="config-panel">
           {widgets.map((widget) => {
             const dropClass = settingsDragState?.overId === widget.id ? `drop-${settingsDragState.position}` : "";

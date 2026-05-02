@@ -1,30 +1,32 @@
-import type { DashboardSettings, WidgetId, WidgetLayout } from "./types";
+import type { DashboardSettings, ThemeMode, WidgetId, WidgetLayout } from "./types";
 
 const STORAGE_KEY = "plz-grid-dashboard:v1";
 
 export const DEFAULT_WIDGETS: WidgetLayout[] = [
-  { id: "place", enabled: true, size: "wide" },
-  { id: "weather", enabled: true, size: "wide" },
+  { id: "place", enabled: true, size: "mini" },
+  { id: "weather", enabled: true, size: "mini" },
   { id: "dwdWeather", enabled: true, size: "mini" },
   { id: "pollen", enabled: true, size: "mini" },
-  { id: "dwdPollen", enabled: true, size: "wide" },
+  { id: "dwdPollen", enabled: true, size: "mini" },
   { id: "air", enabled: true, size: "mini" },
-  { id: "ubaAir", enabled: true, size: "wide" },
-  { id: "warnings", enabled: true, size: "full" },
+  { id: "ubaAir", enabled: true, size: "mini" },
+  { id: "warnings", enabled: true, size: "mini" },
   { id: "sun", enabled: true, size: "mini" },
   { id: "moon", enabled: true, size: "mini" },
   { id: "water", enabled: true, size: "mini" },
   { id: "strom", enabled: true, size: "mini" },
-  { id: "insights", enabled: true, size: "full" }
+  { id: "insights", enabled: true, size: "mini" }
 ];
 
 const widgetIds = new Set<WidgetId>(DEFAULT_WIDGETS.map((widget) => widget.id));
+const themeModes = new Set<ThemeMode>(["system", "standard", "dark"]);
+const DEFAULT_THEME: ThemeMode = "system";
 
 export function loadSettings(): DashboardSettings {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      return { postalCode: "10115", widgets: DEFAULT_WIDGETS };
+      return { postalCode: "10115", theme: DEFAULT_THEME, widgets: DEFAULT_WIDGETS };
     }
 
     const parsed = JSON.parse(raw) as Partial<DashboardSettings>;
@@ -38,6 +40,7 @@ export function loadSettings(): DashboardSettings {
 
     return {
       postalCode: typeof parsed.postalCode === "string" ? parsed.postalCode : "10115",
+      theme: themeModes.has(parsed.theme as ThemeMode) ? (parsed.theme as ThemeMode) : DEFAULT_THEME,
       widgets: merged.map((widget) => ({
         id: widget.id,
         enabled: widget.enabled,
@@ -45,7 +48,7 @@ export function loadSettings(): DashboardSettings {
       }))
     };
   } catch {
-    return { postalCode: "10115", widgets: DEFAULT_WIDGETS };
+    return { postalCode: "10115", theme: DEFAULT_THEME, widgets: DEFAULT_WIDGETS };
   }
 }
 
