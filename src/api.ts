@@ -49,6 +49,8 @@ type OpenPlzLocality = {
   federalState?: { name?: string };
 };
 
+export type LocationChoice = OpenPlzLocality;
+
 type DwdPollenPayload = {
   last_update?: string;
   content?: Array<{
@@ -134,13 +136,15 @@ const numberOrNull = (value: unknown): number | null => {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 };
 
-export async function loadDashboardData(postalCode: string): Promise<DashboardData> {
-  const location = await getLocation(postalCode);
+export async function loadDashboardData(searchTerm: string, selectedPlace?: LocationChoice): Promise<DashboardData> {
+  const resolvedPlace = selectedPlace ?? (/^\d{5}$/.test(searchTerm) ? null : requireLocationChoice((await searchLocationChoices(searchTerm))[0]));
+  const postalCode = resolvedPlace?.postalCode ?? searchTerm;
+  const location = await getLocation(postalCode, resolvedPlace);
   const [weather, air, warnings, place, brightSky, dwdPollen, ubaAir, water, strom] = await Promise.all([
     getWeather(location),
     getAirQuality(location),
     getWarnings(location),
-    optional(() => getOpenPlz(postalCode)),
+    resolvedPlace ? Promise.resolve(localityToPlaceData(resolvedPlace)) : optional(() => getOpenPlz(postalCode)),
     optional(() => getBrightSky(location)),
     optional(() => getDwdPollen(location)),
     optional(() => getUbaAir(location)),
@@ -164,6 +168,36 @@ export async function loadDashboardData(postalCode: string): Promise<DashboardDa
   };
 }
 
+export async function searchLocationChoices(name: string): Promise<LocationChoice[]> {
+  const params = new URLSearchParams({ name, pageSize: "50" });
+  const response = await fetch(`https://openplzapi.org/de/Localities?${params.toString()}`, {
+    headers: { accept: "text/json" }
+  });
+  if (!response.ok) {
+    throw new Error("Dieser Ort konnte nicht gefunden werden.");
+  }
+
+  const data = (await response.json()) as OpenPlzLocality[];
+  const normalizedName = normalize(name);
+  const localitiesWithPostalCode = data.filter((entry) => entry.postalCode);
+  const exactMatches = localitiesWithPostalCode.filter((entry) => {
+    return normalize(entry.name) === normalizedName || normalize(entry.municipality?.name ?? "") === normalizedName;
+  });
+  const matches = (exactMatches.length ? exactMatches : localitiesWithPostalCode)
+    .sort((a, b) => {
+      const aExact = normalize(a.name) === normalizedName || normalize(a.municipality?.name ?? "") === normalizedName;
+      const bExact = normalize(b.name) === normalizedName || normalize(b.municipality?.name ?? "") === normalizedName;
+      return Number(bExact) - Number(aExact) || a.postalCode.localeCompare(b.postalCode);
+    });
+
+  const choices = new Map<string, LocationChoice>();
+  for (const locality of matches) {
+    if (!choices.has(locality.postalCode)) choices.set(locality.postalCode, locality);
+  }
+
+  return [...choices.values()];
+}
+
 async function optional<T>(loader: () => Promise<T>): Promise<T | null> {
   try {
     return await loader();
@@ -172,10 +206,10 @@ async function optional<T>(loader: () => Promise<T>): Promise<T | null> {
   }
 }
 
-async function getLocation(postalCode: string): Promise<LocationInfo> {
+async function getLocation(postalCode: string, locality?: OpenPlzLocality | null): Promise<LocationInfo> {
   const response = await fetch(`https://api.zippopotam.us/de/${encodeURIComponent(postalCode)}`);
   if (!response.ok) {
-    throw new Error("Diese PLZ konnte nicht gefunden werden.");
+    throw new Error("Diese PLZ oder dieser Ort konnte nicht gefunden werden.");
   }
 
   const data = (await response.json()) as ZippopotamusResponse;
@@ -186,11 +220,18 @@ async function getLocation(postalCode: string): Promise<LocationInfo> {
 
   return {
     postalCode: data["post code"],
-    place: place["place name"],
-    state: place.state,
+    place: locality?.name ?? place["place name"],
+    state: locality?.federalState?.name ?? place.state,
     latitude: Number(place.latitude),
     longitude: Number(place.longitude)
   };
+}
+
+function requireLocationChoice(choice: LocationChoice | undefined): LocationChoice {
+  if (!choice?.postalCode) {
+    throw new Error("Zu diesem Ort wurde keine PLZ gefunden.");
+  }
+  return choice;
 }
 
 async function getOpenPlz(postalCode: string): Promise<PlaceData | null> {
@@ -204,15 +245,19 @@ async function getOpenPlz(postalCode: string): Promise<PlaceData | null> {
   const first = data[0];
   if (!first) return null;
 
+  return localityToPlaceData(first);
+}
+
+function localityToPlaceData(locality: OpenPlzLocality): PlaceData {
   return {
-    postalCode: first.postalCode,
-    name: first.name,
-    municipality: first.municipality?.name,
-    municipalityType: first.municipality?.type,
-    district: first.district?.name,
-    districtType: first.district?.type,
-    governmentRegion: first.governmentRegion?.name,
-    federalState: first.federalState?.name
+    postalCode: locality.postalCode,
+    name: locality.name,
+    municipality: locality.municipality?.name,
+    municipalityType: locality.municipality?.type,
+    district: locality.district?.name,
+    districtType: locality.district?.type,
+    governmentRegion: locality.governmentRegion?.name,
+    federalState: locality.federalState?.name
   };
 }
 

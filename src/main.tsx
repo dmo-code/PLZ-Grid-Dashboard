@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { loadDashboardData } from "./api";
+import { loadDashboardData, searchLocationChoices, type LocationChoice } from "./api";
 import { loadSettings, saveSettings } from "./storage";
 import type { DashboardData, DashboardSettings, WidgetId, WidgetLayout, WidgetSize } from "./types";
 import "./styles.css";
@@ -54,6 +54,7 @@ function App() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [locationChoices, setLocationChoices] = useState<LocationChoice[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [dragState, setDragState] = useState<{
     id: WidgetId;
@@ -73,18 +74,35 @@ function App() {
   const enabledWidgets = useMemo(() => settings.widgets.filter((widget) => widget.enabled), [settings.widgets]);
   const weatherTheme = getWeatherTheme(data);
 
-  async function refresh(postalCode: string) {
-    if (!/^\d{5}$/.test(postalCode)) {
-      setError("Bitte gib eine fünfstellige deutsche PLZ ein.");
+  async function refresh(searchTerm: string, selectedPlace?: LocationChoice) {
+    if (!searchTerm) {
+      setError("Bitte gib eine deutsche PLZ oder einen Ort ein.");
       return;
     }
 
     setLoading(true);
     setError(null);
+    setMeasuredWidgetHeights({});
     try {
-      const dashboardData = await loadDashboardData(postalCode);
+      const isPostalCode = /^\d{5}$/.test(searchTerm);
+      if (!selectedPlace && !isPostalCode) {
+        const choices = await searchLocationChoices(searchTerm);
+        if (choices.length > 1) {
+          setLocationChoices(choices);
+          setLoading(false);
+          return;
+        }
+        if (choices.length === 0) {
+          throw new Error("Zu diesem Ort wurde keine PLZ gefunden.");
+        }
+        selectedPlace = choices[0];
+      }
+
+      const dashboardData = await loadDashboardData(selectedPlace?.postalCode ?? searchTerm, selectedPlace);
       setData(dashboardData);
-      setSettings((current) => ({ ...current, postalCode }));
+      setPostalInput(dashboardData.location.postalCode);
+      setLocationChoices([]);
+      setSettings((current) => ({ ...current, postalCode: dashboardData.location.postalCode }));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Die Daten konnten nicht geladen werden.");
     } finally {
@@ -162,19 +180,41 @@ function App() {
               void refresh(postalInput.trim());
             }}
           >
-            <label htmlFor="postalCode">Postleitzahl</label>
-            <div>
+            <label htmlFor="postalCode">Postleitzahl oder Ort</label>
+            <div className="search-field">
               <input
                 id="postalCode"
-                inputMode="numeric"
-                pattern="[0-9]{5}"
-                maxLength={5}
+                inputMode="search"
                 value={postalInput}
-                onChange={(event) => setPostalInput(event.target.value.replace(/\D/g, ""))}
-                placeholder="10115"
+                onChange={(event) => {
+                  setPostalInput(event.target.value);
+                  setLocationChoices([]);
+                }}
+                placeholder="10115 oder Berlin"
               />
               <button type="submit">Aktualisieren</button>
             </div>
+            {locationChoices.length > 1 && (
+              <label className="location-choice-select">
+                <span>PLZ auswählen</span>
+                <select
+                  defaultValue=""
+                  onChange={(event) => {
+                    const choice = locationChoices.find((item) => item.postalCode === event.target.value);
+                    if (choice) void refresh(choice.postalCode, choice);
+                  }}
+                >
+                  <option value="" disabled>
+                    Mehrere PLZ gefunden
+                  </option>
+                  {locationChoices.map((choice) => (
+                    <option key={`${choice.postalCode}-${choice.name}`} value={choice.postalCode}>
+                      {choice.postalCode} - {[choice.name, choice.district?.name].filter(Boolean).join(", ")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </form>
           <button className="settings-toggle" type="button" onClick={() => setSettingsOpen(true)}>
             Widgets
@@ -213,7 +253,7 @@ function App() {
         {data &&
           enabledWidgets.map((widget) => (
             <WidgetFrame
-              key={widget.id}
+              key={`${widget.id}-${data.updatedAt}`}
               widget={widget}
               measuredHeight={measuredWidgetHeights[widget.id]}
               dragState={dragState}
@@ -379,7 +419,7 @@ function WidgetFrame({
     if (!element) return;
 
     const reportHeight = () => {
-      onMeasuredHeight(widget.id, Math.ceil(element.getBoundingClientRect().height));
+      onMeasuredHeight(widget.id, Math.ceil(Math.max(element.getBoundingClientRect().height, element.scrollHeight)));
     };
     reportHeight();
 
@@ -406,7 +446,7 @@ function WidgetFrame({
         </div>
         <span>{sizeLabel(widget.size)}</span>
       </div>
-      {children}
+      <div className="widget-body">{children}</div>
       <button
         className="resize-handle"
         type="button"

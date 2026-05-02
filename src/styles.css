@@ -193,7 +193,7 @@ h1 {
   text-transform: uppercase;
 }
 
-.search div {
+.search-field {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
@@ -228,6 +228,29 @@ h1 {
 
 .settings-toggle {
   min-width: 104px;
+}
+
+.location-choice-select {
+  display: grid;
+  gap: 8px;
+}
+
+.location-choice-select span {
+  color: #66756d;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.location-choice-select select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid rgba(22, 32, 27, 0.14);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #fffef9;
+  color: #17241e;
+  font-weight: 800;
 }
 
 .status-strip {
@@ -419,7 +442,7 @@ h1 {
   background: rgba(255, 254, 249, 0.9);
   box-shadow: 0 16px 42px rgba(30, 43, 36, 0.08);
   backdrop-filter: blur(10px);
-  overflow: hidden;
+  overflow: visible;
   transition:
     box-shadow 160ms ease,
     opacity 160ms ease,
@@ -455,6 +478,7 @@ h1 {
 }
 
 @media (max-width: 1180px) {
+  .widget.compact,
   .widget.mini {
     grid-column: span 6;
   }
@@ -564,6 +588,13 @@ h1 {
   font-size: 1.08rem;
 }
 
+.widget-body {
+  display: grid;
+  min-width: 0;
+  gap: inherit;
+  overflow: hidden;
+}
+
 .drag-grip {
   display: inline-block;
   width: 22px;
@@ -644,6 +675,7 @@ h1 {
 .hero-metric strong {
   font-size: clamp(3rem, 10vw, 5.6rem);
   line-height: 0.9;
+  padding-inline-start: 0.03em;
 }
 
 .hero-metric span {
@@ -1134,7 +1166,9 @@ footer {
   }
 
   .widget,
+  .widget.compact,
   .widget.mini,
+  .widget.tall,
   .widget.wide,
   .widget.large,
   .widget.full {
@@ -1175,7 +1209,8 @@ footer {
     min-width: 0;
   }
 
-  .search div {
+  .search-field,
+  .location-choice-select {
     width: 100%;
     min-width: 0;
   }
@@ -1189,7 +1224,7 @@ footer {
     margin-bottom: 6px;
   }
 
-  .search div,
+  .search-field,
   .detail-list,
   .metric-row,
   .sun-times {
@@ -1282,7 +1317,9 @@ footer {
   }
 
   .widget.wide,
+  .widget.compact,
   .widget.mini,
+  .widget.tall,
   .widget.large,
   .widget.full {
     grid-column: span 8;
