@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { loadDashboardData, searchLocationChoices, type LocationChoice } from "./api";
 import { loadSettings, saveSettings } from "./storage";
@@ -7,8 +7,13 @@ import "./styles.css";
 
 type DropPosition = "before" | "after";
 
-const GRID_AUTO_ROW_HEIGHT = 10;
-const GRID_GAP = 14;
+const MASONRY_GAP = 14;
+
+type MasonryItemLayout = {
+  left: number;
+  top: number;
+  width: number;
+};
 
 const widgetMeta: Record<WidgetId, { title: string; accent: string }> = {
   place: { title: "PLZ-Kontext", accent: "slate" },
@@ -62,7 +67,10 @@ function App() {
     overId?: WidgetId;
     position?: DropPosition;
   } | null>(null);
-  const [measuredWidgetHeights, setMeasuredWidgetHeights] = useState<Partial<Record<WidgetId, number>>>({});
+  const dashboardRef = useRef<HTMLElement | null>(null);
+  const widgetRefs = useRef(new Map<WidgetId, HTMLElement>());
+  const [masonryLayout, setMasonryLayout] = useState<Partial<Record<WidgetId, MasonryItemLayout>>>({});
+  const [masonryHeight, setMasonryHeight] = useState(0);
 
   useEffect(() => {
     saveSettings(settings);
@@ -87,6 +95,92 @@ function App() {
   const enabledWidgets = useMemo(() => settings.widgets.filter((widget) => widget.enabled), [settings.widgets]);
   const weatherTheme = getWeatherTheme(data);
 
+  const updateMasonryLayout = useCallback(() => {
+    const dashboard = dashboardRef.current;
+    if (!dashboard || enabledWidgets.length === 0) {
+      setMasonryLayout({});
+      setMasonryHeight(0);
+      return;
+    }
+
+    const width = dashboard.clientWidth;
+    const columns = getMasonryColumnCount(width);
+    const columnWidth = (width - MASONRY_GAP * (columns - 1)) / columns;
+    const columnHeights = Array.from({ length: columns }, () => 0);
+    const nextLayout: Partial<Record<WidgetId, MasonryItemLayout>> = {};
+
+    for (const widget of enabledWidgets) {
+      const span = Math.min(getMasonrySpan(widget.size), columns);
+      const element = widgetRefs.current.get(widget.id);
+      const measuredHeight = element ? Math.ceil(element.getBoundingClientRect().height) : widget.customHeight ?? getDefaultHeight(widget.size);
+      let column = 0;
+      let top = 0;
+
+      if (span === columns) {
+        top = Math.max(...columnHeights);
+      } else {
+        let bestHeight = Number.POSITIVE_INFINITY;
+        for (let index = 0; index <= columns - span; index += 1) {
+          const candidateHeight = Math.max(...columnHeights.slice(index, index + span));
+          if (candidateHeight < bestHeight) {
+            bestHeight = candidateHeight;
+            column = index;
+            top = candidateHeight;
+          }
+        }
+      }
+
+      const itemWidth = columnWidth * span + MASONRY_GAP * (span - 1);
+      nextLayout[widget.id] = {
+        left: column * (columnWidth + MASONRY_GAP),
+        top,
+        width: itemWidth
+      };
+
+      const nextHeight = top + measuredHeight + MASONRY_GAP;
+      for (let index = column; index < column + span; index += 1) {
+        columnHeights[index] = nextHeight;
+      }
+    }
+
+    setMasonryLayout(nextLayout);
+    setMasonryHeight(Math.max(0, Math.max(...columnHeights) - MASONRY_GAP));
+  }, [enabledWidgets]);
+
+  useLayoutEffect(() => {
+    updateMasonryLayout();
+  }, [updateMasonryLayout, data?.updatedAt]);
+
+  useEffect(() => {
+    const dashboard = dashboardRef.current;
+    if (!dashboard) return;
+
+    const observer = new ResizeObserver(updateMasonryLayout);
+    observer.observe(dashboard);
+    for (const widget of enabledWidgets) {
+      const element = widgetRefs.current.get(widget.id);
+      if (element) observer.observe(element);
+    }
+
+    window.addEventListener("resize", updateMasonryLayout);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateMasonryLayout);
+    };
+  }, [enabledWidgets, updateMasonryLayout]);
+
+  const registerWidgetRef = useCallback(
+    (id: WidgetId) => (element: HTMLElement | null) => {
+      if (element) {
+        widgetRefs.current.set(id, element);
+      } else {
+        widgetRefs.current.delete(id);
+      }
+      window.requestAnimationFrame(updateMasonryLayout);
+    },
+    [updateMasonryLayout]
+  );
+
   async function refresh(searchTerm: string, selectedPlace?: LocationChoice) {
     if (!searchTerm) {
       setError("Bitte gib eine deutsche PLZ oder einen Ort ein.");
@@ -95,7 +189,6 @@ function App() {
 
     setLoading(true);
     setError(null);
-    setMeasuredWidgetHeights({});
     try {
       const isPostalCode = /^\d{5}$/.test(searchTerm);
       if (!selectedPlace && !isPostalCode) {
@@ -143,13 +236,6 @@ function App() {
       return { ...current, widgets };
     });
   }
-
-  const handleWidgetMeasuredHeight = useCallback((id: WidgetId, height: number) => {
-    setMeasuredWidgetHeights((current) => {
-      if (Math.abs((current[id] ?? 0) - height) < 2) return current;
-      return { ...current, [id]: height };
-    });
-  }, []);
 
   function startWidgetResize(event: React.PointerEvent<HTMLButtonElement>, id: WidgetId, widget: WidgetLayout) {
     event.preventDefault();
@@ -262,13 +348,14 @@ function App() {
       {error && <p className="message error">{error}</p>}
       {loading && <p className="message">Daten werden geladen...</p>}
 
-      <section className="dashboard-grid" aria-label="Dashboard Widgets">
+      <section className="dashboard-grid" aria-label="Dashboard Widgets" ref={dashboardRef} style={{ height: masonryHeight || undefined }}>
         {data &&
           enabledWidgets.map((widget) => (
             <WidgetFrame
               key={`${widget.id}-${data.updatedAt}`}
               widget={widget}
-              measuredHeight={measuredWidgetHeights[widget.id]}
+              layout={masonryLayout[widget.id]}
+              widgetRef={registerWidgetRef(widget.id)}
               dragState={dragState}
               onDragStart={(event) => {
                 event.dataTransfer.effectAllowed = "move";
@@ -290,7 +377,6 @@ function App() {
               }}
               onDragEnd={() => setDragState(null)}
               onResizeStart={(event) => startWidgetResize(event, widget.id, widget)}
-              onMeasuredHeight={handleWidgetMeasuredHeight}
             >
               {renderWidget(widget.id, data)}
             </WidgetFrame>
@@ -406,60 +492,38 @@ function WidgetSettingsPanel({
 
 function WidgetFrame({
   widget,
-  measuredHeight,
+  layout,
+  widgetRef,
   dragState,
   onDragStart,
   onDragOver,
   onDrop,
   onDragEnd,
   onResizeStart,
-  onMeasuredHeight,
   children
 }: {
   widget: WidgetLayout;
-  measuredHeight?: number;
+  layout?: MasonryItemLayout;
+  widgetRef: (element: HTMLElement | null) => void;
   dragState: { id: WidgetId; overId?: WidgetId; position?: DropPosition } | null;
   onDragStart: (event: React.DragEvent<HTMLElement>) => void;
   onDragOver: (event: React.DragEvent<HTMLElement>) => void;
   onDrop: (event: React.DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
   onResizeStart: (event: React.PointerEvent<HTMLButtonElement>, widget: WidgetLayout) => void;
-  onMeasuredHeight: (id: WidgetId, height: number) => void;
   children: React.ReactNode;
 }) {
-  const widgetRef = useRef<HTMLElement | null>(null);
-  const bodyRef = useRef<HTMLDivElement | null>(null);
   const dropClass = dragState?.overId === widget.id ? `drop-${dragState.position}` : "";
-  const targetHeight = widget.customHeight ?? measuredHeight ?? getDefaultHeight(widget.size);
   const widgetStyle: React.CSSProperties = {
-    gridRowEnd: `span ${heightToGridSpan(targetHeight)}`,
+    ...(layout
+      ? {
+          position: "absolute",
+          width: `${layout.width}px`,
+          transform: `translate3d(${layout.left}px, ${layout.top}px, 0)`
+        }
+      : {}),
     ...(widget.customHeight ? { height: `${widget.customHeight}px`, minHeight: `${widget.customHeight}px` } : {})
   };
-
-  useEffect(() => {
-    const element = widgetRef.current;
-    if (!element) return;
-
-    const reportHeight = () => {
-      const body = bodyRef.current;
-      const styles = window.getComputedStyle(element);
-      const paddingTop = Number.parseFloat(styles.paddingTop) || 0;
-      const paddingBottom = Number.parseFloat(styles.paddingBottom) || 0;
-      const borderTop = Number.parseFloat(styles.borderTopWidth) || 0;
-      const borderBottom = Number.parseFloat(styles.borderBottomWidth) || 0;
-      const gap = Number.parseFloat(styles.rowGap) || Number.parseFloat(styles.gap) || 0;
-      const headingHeight = element.querySelector<HTMLElement>(".widget-heading")?.offsetHeight ?? 0;
-      const bodyHeight = body ? Math.max(body.scrollHeight, body.getBoundingClientRect().height) : 0;
-      const contentHeight = paddingTop + borderTop + headingHeight + gap + bodyHeight + paddingBottom + borderBottom;
-      onMeasuredHeight(widget.id, Math.ceil(Math.max(element.getBoundingClientRect().height, element.scrollHeight, contentHeight)) + 8);
-    };
-    reportHeight();
-
-    const observer = new ResizeObserver(reportHeight);
-    observer.observe(element);
-    if (bodyRef.current) observer.observe(bodyRef.current);
-    return () => observer.disconnect();
-  }, [onMeasuredHeight, widget.id]);
 
   return (
     <article
@@ -479,9 +543,7 @@ function WidgetFrame({
         </div>
         <span>{sizeLabel(widget.size)}</span>
       </div>
-      <div className="widget-body" ref={bodyRef}>
-        {children}
-      </div>
+      <div className="widget-body">{children}</div>
       <button
         className="resize-handle"
         type="button"
@@ -1096,8 +1158,16 @@ function getDefaultHeight(size: WidgetSize): number {
   }
 }
 
-function heightToGridSpan(height: number) {
-  return Math.max(1, Math.ceil((height + GRID_GAP) / (GRID_AUTO_ROW_HEIGHT + GRID_GAP)) + 1);
+function getMasonryColumnCount(width: number) {
+  if (width < 960) return 1;
+  if (width < 1180) return 2;
+  return 3;
+}
+
+function getMasonrySpan(size: WidgetSize) {
+  if (size === "wide" || size === "large") return 2;
+  if (size === "full") return 3;
+  return 1;
 }
 
 function sizeLabel(size: WidgetSize) {
