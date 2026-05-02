@@ -1206,19 +1206,25 @@ footer {
   }
 
   .dashboard-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
     gap: 12px;
   }
 
-  .widget,
-  .widget.wide,
-  .widget.tall,
-  .widget.large,
-  .widget.full {
-    grid-column: 1;
+  .widget {
+    grid-column: span 8;
     min-height: auto;
     padding: 16px;
     gap: 16px;
+  }
+
+  .widget.wide,
+  .widget.large,
+  .widget.full {
+    grid-column: span 8;
+  }
+
+  .widget.tall {
+    grid-row: span 2;
   }
 
   .widget h2 {

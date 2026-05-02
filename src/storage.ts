@@ -3,19 +3,19 @@ import type { DashboardSettings, WidgetId, WidgetLayout } from "./types";
 const STORAGE_KEY = "plz-grid-dashboard:v1";
 
 export const DEFAULT_WIDGETS: WidgetLayout[] = [
-  { id: "place", enabled: true, size: "compact" },
+  { id: "place", enabled: true, size: "wide" },
   { id: "weather", enabled: true, size: "wide" },
-  { id: "dwdWeather", enabled: true, size: "compact" },
-  { id: "pollen", enabled: true, size: "compact" },
+  { id: "dwdWeather", enabled: true, size: "wide" },
+  { id: "pollen", enabled: true, size: "wide" },
   { id: "dwdPollen", enabled: true, size: "wide" },
-  { id: "air", enabled: true, size: "compact" },
+  { id: "air", enabled: true, size: "wide" },
   { id: "ubaAir", enabled: true, size: "wide" },
-  { id: "warnings", enabled: true, size: "wide" },
-  { id: "sun", enabled: true, size: "compact" },
-  { id: "moon", enabled: true, size: "compact" },
-  { id: "water", enabled: true, size: "compact" },
-  { id: "strom", enabled: true, size: "compact" },
-  { id: "insights", enabled: true, size: "wide" }
+  { id: "warnings", enabled: true, size: "full" },
+  { id: "sun", enabled: true, size: "wide" },
+  { id: "moon", enabled: true, size: "wide" },
+  { id: "water", enabled: true, size: "wide" },
+  { id: "strom", enabled: true, size: "wide" },
+  { id: "insights", enabled: true, size: "full" }
 ];
 
 const widgetIds = new Set<WidgetId>(DEFAULT_WIDGETS.map((widget) => widget.id));
