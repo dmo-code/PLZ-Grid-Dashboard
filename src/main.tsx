@@ -71,6 +71,21 @@ function App() {
     void refresh(settings.postalCode);
   }, []);
 
+  useEffect(() => {
+    function scrollToTopFromViewportTop(event: PointerEvent | TouchEvent) {
+      const point = "changedTouches" in event ? event.changedTouches[0] : event;
+      if (!point || window.scrollY <= 0 || point.clientY > 44) return;
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    window.addEventListener("pointerup", scrollToTopFromViewportTop);
+    window.addEventListener("touchend", scrollToTopFromViewportTop, { passive: true });
+    return () => {
+      window.removeEventListener("pointerup", scrollToTopFromViewportTop);
+      window.removeEventListener("touchend", scrollToTopFromViewportTop);
+    };
+  }, []);
+
   const enabledWidgets = useMemo(() => settings.widgets.filter((widget) => widget.enabled), [settings.widgets]);
   const weatherTheme = getWeatherTheme(data);
 
