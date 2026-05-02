@@ -364,7 +364,94 @@ h1 {
 .config-panel {
   display: grid;
   grid-template-columns: 1fr;
+  gap: 18px;
+}
+
+.settings-category {
+  display: grid;
   gap: 12px;
+  padding: 0 0 10px;
+  border-bottom: 1px solid rgba(22, 32, 27, 0.08);
+}
+
+.theme-dark .settings-category {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.settings-category-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.52);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.theme-dark .settings-category-header {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.settings-category-header:hover {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.theme-dark .settings-category-header:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.settings-category-header h3 {
+  margin: 0;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.settings-category-header span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.category-config-list {
+  display: grid;
+  gap: 10px;
+  transition: max-height 170ms ease, opacity 170ms ease, transform 170ms ease;
+}
+
+.category-config-list.collapsed {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-6px);
+  overflow: hidden;
+}
+
+.category-toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(22, 32, 27, 0.06);
+  color: var(--muted);
+  font-size: 0.8rem;
+  transition: transform 170ms ease;
+}
+
+.theme-dark .category-toggle-icon {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.category-toggle-icon.collapsed {
+  transform: rotate(-90deg);
 }
 
 .config-card {

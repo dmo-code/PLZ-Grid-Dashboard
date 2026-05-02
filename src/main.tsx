@@ -53,6 +53,15 @@ const weatherLabels = new Map<number, string>([
   [95, "Gewitter"]
 ]);
 
+const widgetCategories = [
+  { id: "context", title: "Standort & Kontext", ids: ["place"] as WidgetId[] },
+  { id: "weather", title: "Wetter", ids: ["weather", "dwdWeather", "warnings"] as WidgetId[] },
+  { id: "air", title: "Luft & Umwelt", ids: ["pollen", "dwdPollen", "air", "ubaAir"] as WidgetId[] },
+  { id: "sunMoon", title: "Sonne & Mond", ids: ["sun", "moon"] as WidgetId[] },
+  { id: "waterEnergy", title: "Wasser & Energie", ids: ["water", "strom"] as WidgetId[] },
+  { id: "insights", title: "Smart Insights", ids: ["insights"] as WidgetId[] }
+];
+
 function App() {
   const [settings, setSettings] = useState<DashboardSettings>(() => loadSettings());
   const [postalInput, setPostalInput] = useState(settings.postalCode);
@@ -408,6 +417,16 @@ function WidgetSettingsPanel({
     overId?: WidgetId;
     position?: DropPosition;
   } | null>(null);
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(widgetCategories.map((category) => [category.id, false]))
+  );
+
+  const toggleCategory = (categoryId: string) => {
+    setCollapsedCategories((current) => ({
+      ...current,
+      [categoryId]: !current[categoryId]
+    }));
+  };
 
   return (
     <div className="settings-overlay" role="presentation" onClick={onClose}>
@@ -430,59 +449,85 @@ function WidgetSettingsPanel({
           </select>
         </label>
         <section className="config-panel">
-          {widgets.map((widget) => {
-            const dropClass = settingsDragState?.overId === widget.id ? `drop-${settingsDragState.position}` : "";
+          {widgetCategories.map((category) => {
+            const categoryWidgets = widgets.filter((widget) => category.ids.includes(widget.id));
+            if (categoryWidgets.length === 0) return null;
             return (
-              <article
-                key={widget.id}
-                className={`config-card ${settingsDragState?.id === widget.id ? "dragging" : ""} ${dropClass}`}
-                draggable
-                onDragStart={(event) => {
-                  event.dataTransfer.effectAllowed = "move";
-                  event.dataTransfer.setData("text/plain", widget.id);
-                  setSettingsDragState({ id: widget.id });
-                }}
-                onDragOver={(event) => {
-                  const draggedId = settingsDragState?.id ?? (event.dataTransfer.getData("text/plain") as WidgetId);
-                  if (!draggedId || draggedId === widget.id) return;
-                  event.preventDefault();
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  const position = event.clientY > rect.top + rect.height / 2 ? "after" : "before";
-                  setSettingsDragState({ id: draggedId, overId: widget.id, position });
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  const draggedId = settingsDragState?.id ?? (event.dataTransfer.getData("text/plain") as WidgetId);
-                  const position = settingsDragState?.position;
-                  if (draggedId && position) onMoveTo(draggedId, widget.id, position);
-                  setSettingsDragState(null);
-                }}
-                onDragEnd={() => setSettingsDragState(null)}
-              >
-                <label>
-                  <span className="config-drag-handle" aria-hidden="true" />
-                  <input
-                    type="checkbox"
-                    checked={widget.enabled}
-                    draggable={false}
-                    onChange={(event) => onUpdate(widget.id, { enabled: event.target.checked })}
-                  />
-                  {widgetMeta[widget.id].title}
-                </label>
-                <select
-                  value={widget.size}
-                  onChange={(event) => onUpdate(widget.id, { size: event.target.value as WidgetSize })}
-                  aria-label={`${widgetMeta[widget.id].title} Größe`}
-                  draggable={false}
+              <section key={category.id} className="settings-category">
+                <button
+                  type="button"
+                  className="settings-category-header"
+                  onClick={() => toggleCategory(category.id)}
+                  aria-expanded={!collapsedCategories[category.id]}
                 >
-                  <option value="mini">Mini</option>
-                  <option value="compact">Kompakt</option>
-                  <option value="wide">Breit</option>
-                  <option value="tall">Hoch</option>
-                  <option value="large">Groß</option>
-                  <option value="full">Volle Breite</option>
-                </select>
-              </article>
+                  <div>
+                    <h3>{category.title}</h3>
+                    <span>{categoryWidgets.length} Widget{categoryWidgets.length === 1 ? "" : "s"}</span>
+                  </div>
+                  <span className={`category-toggle-icon ${collapsedCategories[category.id] ? "collapsed" : "expanded"}`} aria-hidden="true">
+                    ▼
+                  </span>
+                </button>
+                <div
+                  className={`category-config-list ${collapsedCategories[category.id] ? "collapsed" : "expanded"}`}
+                >
+                  {categoryWidgets.map((widget) => {
+                    const dropClass = settingsDragState?.overId === widget.id ? `drop-${settingsDragState.position}` : "";
+                    return (
+                      <article
+                        key={widget.id}
+                        className={`config-card ${settingsDragState?.id === widget.id ? "dragging" : ""} ${dropClass}`}
+                        draggable
+                        onDragStart={(event) => {
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData("text/plain", widget.id);
+                          setSettingsDragState({ id: widget.id });
+                        }}
+                        onDragOver={(event) => {
+                          const draggedId = settingsDragState?.id ?? (event.dataTransfer.getData("text/plain") as WidgetId);
+                          if (!draggedId || draggedId === widget.id) return;
+                          event.preventDefault();
+                          const rect = event.currentTarget.getBoundingClientRect();
+                          const position = event.clientY > rect.top + rect.height / 2 ? "after" : "before";
+                          setSettingsDragState({ id: draggedId, overId: widget.id, position });
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          const draggedId = settingsDragState?.id ?? (event.dataTransfer.getData("text/plain") as WidgetId);
+                          const position = settingsDragState?.position;
+                          if (draggedId && position) onMoveTo(draggedId, widget.id, position);
+                          setSettingsDragState(null);
+                        }}
+                        onDragEnd={() => setSettingsDragState(null)}
+                      >
+                        <label>
+                          <span className="config-drag-handle" aria-hidden="true" />
+                          <input
+                            type="checkbox"
+                            checked={widget.enabled}
+                            draggable={false}
+                            onChange={(event) => onUpdate(widget.id, { enabled: event.target.checked })}
+                          />
+                          {widgetMeta[widget.id].title}
+                        </label>
+                        <select
+                          value={widget.size}
+                          onChange={(event) => onUpdate(widget.id, { size: event.target.value as WidgetSize })}
+                          aria-label={`${widgetMeta[widget.id].title} Größe`}
+                          draggable={false}
+                        >
+                          <option value="mini">Mini</option>
+                          <option value="compact">Kompakt</option>
+                          <option value="wide">Breit</option>
+                          <option value="tall">Hoch</option>
+                          <option value="large">Groß</option>
+                          <option value="full">Volle Breite</option>
+                        </select>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
             );
           })}
         </section>
