@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { loadDashboardData } from "./api";
 import { loadSettings, saveSettings } from "./storage";
@@ -6,6 +6,9 @@ import type { DashboardData, DashboardSettings, WidgetId, WidgetLayout, WidgetSi
 import "./styles.css";
 
 type DropPosition = "before" | "after";
+
+const GRID_AUTO_ROW_HEIGHT = 10;
+const GRID_GAP = 14;
 
 const widgetMeta: Record<WidgetId, { title: string; accent: string }> = {
   place: { title: "PLZ-Kontext", accent: "slate" },
@@ -57,6 +60,7 @@ function App() {
     overId?: WidgetId;
     position?: DropPosition;
   } | null>(null);
+  const [measuredWidgetHeights, setMeasuredWidgetHeights] = useState<Partial<Record<WidgetId, number>>>({});
 
   useEffect(() => {
     saveSettings(settings);
@@ -95,17 +99,6 @@ function App() {
     }));
   }
 
-  function moveWidget(id: WidgetId, direction: -1 | 1) {
-    setSettings((current) => {
-      const widgets = [...current.widgets];
-      const index = widgets.findIndex((widget) => widget.id === id);
-      const nextIndex = index + direction;
-      if (index < 0 || nextIndex < 0 || nextIndex >= widgets.length) return current;
-      [widgets[index], widgets[nextIndex]] = [widgets[nextIndex], widgets[index]];
-      return { ...current, widgets };
-    });
-  }
-
   function moveWidgetTo(id: WidgetId, targetId: WidgetId, position: DropPosition) {
     if (id === targetId) return;
     setSettings((current) => {
@@ -120,19 +113,24 @@ function App() {
     });
   }
 
-  function startWidgetResize(event: React.PointerEvent, id: WidgetId, size: WidgetSize) {
+  const handleWidgetMeasuredHeight = useCallback((id: WidgetId, height: number) => {
+    setMeasuredWidgetHeights((current) => {
+      if (Math.abs((current[id] ?? 0) - height) < 2) return current;
+      return { ...current, [id]: height };
+    });
+  }, []);
+
+  function startWidgetResize(event: React.PointerEvent<HTMLButtonElement>, id: WidgetId, widget: WidgetLayout) {
     event.preventDefault();
     event.stopPropagation();
-    const startX = event.clientX;
     const startY = event.clientY;
-    const initial = sizeToDimensions(size);
+    const widgetElement = event.currentTarget.closest<HTMLElement>(".widget");
+    const initialHeight = widgetElement?.getBoundingClientRect().height ?? widget.customHeight ?? getDefaultHeight(widget.size);
 
     function updateFromPointer(pointerEvent: PointerEvent) {
-      const deltaX = pointerEvent.clientX - startX;
       const deltaY = pointerEvent.clientY - startY;
-      const width = getResizedWidth(initial.width, deltaX);
-      const tall = width === "full" ? false : deltaY > 70 ? true : deltaY < -70 ? false : initial.tall;
-      updateWidget(id, { size: dimensionsToSize(width, tall) });
+      const newHeight = Math.max(150, Math.round(initialHeight + deltaY));
+      updateWidget(id, { customHeight: newHeight });
     }
 
     function stopResize() {
@@ -203,7 +201,7 @@ function App() {
         <WidgetSettingsPanel
           widgets={settings.widgets}
           onClose={() => setSettingsOpen(false)}
-          onMove={moveWidget}
+          onMoveTo={moveWidgetTo}
           onUpdate={updateWidget}
         />
       )}
@@ -217,6 +215,7 @@ function App() {
             <WidgetFrame
               key={widget.id}
               widget={widget}
+              measuredHeight={measuredWidgetHeights[widget.id]}
               dragState={dragState}
               onDragStart={(event) => {
                 event.dataTransfer.effectAllowed = "move";
@@ -237,7 +236,8 @@ function App() {
                 setDragState(null);
               }}
               onDragEnd={() => setDragState(null)}
-              onResizeStart={(event) => startWidgetResize(event, widget.id, widget.size)}
+              onResizeStart={(event) => startWidgetResize(event, widget.id, widget)}
+              onMeasuredHeight={handleWidgetMeasuredHeight}
             >
               {renderWidget(widget.id, data)}
             </WidgetFrame>
@@ -255,14 +255,20 @@ function App() {
 function WidgetSettingsPanel({
   widgets,
   onClose,
-  onMove,
+  onMoveTo,
   onUpdate
 }: {
   widgets: WidgetLayout[];
   onClose: () => void;
-  onMove: (id: WidgetId, direction: -1 | 1) => void;
+  onMoveTo: (id: WidgetId, targetId: WidgetId, position: DropPosition) => void;
   onUpdate: (id: WidgetId, patch: Partial<WidgetLayout>) => void;
 }) {
+  const [settingsDragState, setSettingsDragState] = useState<{
+    id: WidgetId;
+    overId?: WidgetId;
+    position?: DropPosition;
+  } | null>(null);
+
   return (
     <div className="settings-overlay" role="presentation" onClick={onClose}>
       <aside className="settings-panel" aria-label="Widget-Konfiguration" onClick={(event) => event.stopPropagation()}>
@@ -276,42 +282,61 @@ function WidgetSettingsPanel({
           </button>
         </div>
         <section className="config-panel">
-          {widgets.map((widget, index) => (
-            <article key={widget.id} className="config-card">
-              <label>
-                <input
-                  type="checkbox"
-                  checked={widget.enabled}
-                  onChange={(event) => onUpdate(widget.id, { enabled: event.target.checked })}
-                />
-                {widgetMeta[widget.id].title}
-              </label>
-              <select
-                value={widget.size}
-                onChange={(event) => onUpdate(widget.id, { size: event.target.value as WidgetSize })}
-                aria-label={`${widgetMeta[widget.id].title} Größe`}
+          {widgets.map((widget) => {
+            const dropClass = settingsDragState?.overId === widget.id ? `drop-${settingsDragState.position}` : "";
+            return (
+              <article
+                key={widget.id}
+                className={`config-card ${settingsDragState?.id === widget.id ? "dragging" : ""} ${dropClass}`}
+                draggable
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", widget.id);
+                  setSettingsDragState({ id: widget.id });
+                }}
+                onDragOver={(event) => {
+                  const draggedId = settingsDragState?.id ?? (event.dataTransfer.getData("text/plain") as WidgetId);
+                  if (!draggedId || draggedId === widget.id) return;
+                  event.preventDefault();
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  const position = event.clientY > rect.top + rect.height / 2 ? "after" : "before";
+                  setSettingsDragState({ id: draggedId, overId: widget.id, position });
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const draggedId = settingsDragState?.id ?? (event.dataTransfer.getData("text/plain") as WidgetId);
+                  const position = settingsDragState?.position;
+                  if (draggedId && position) onMoveTo(draggedId, widget.id, position);
+                  setSettingsDragState(null);
+                }}
+                onDragEnd={() => setSettingsDragState(null)}
               >
-                <option value="compact">Kompakt</option>
-                <option value="wide">Breit</option>
-                <option value="tall">Hoch</option>
-                <option value="large">Groß</option>
-                <option value="full">Volle Breite</option>
-              </select>
-              <div className="order-controls">
-                <button type="button" onClick={() => onMove(widget.id, -1)} disabled={index === 0} aria-label="Nach links">
-                  ←
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onMove(widget.id, 1)}
-                  disabled={index === widgets.length - 1}
-                  aria-label="Nach rechts"
+                <label>
+                  <span className="config-drag-handle" aria-hidden="true" />
+                  <input
+                    type="checkbox"
+                    checked={widget.enabled}
+                    draggable={false}
+                    onChange={(event) => onUpdate(widget.id, { enabled: event.target.checked })}
+                  />
+                  {widgetMeta[widget.id].title}
+                </label>
+                <select
+                  value={widget.size}
+                  onChange={(event) => onUpdate(widget.id, { size: event.target.value as WidgetSize })}
+                  aria-label={`${widgetMeta[widget.id].title} Größe`}
+                  draggable={false}
                 >
-                  →
-                </button>
-              </div>
-            </article>
-          ))}
+                  <option value="mini">Mini</option>
+                  <option value="compact">Kompakt</option>
+                  <option value="wide">Breit</option>
+                  <option value="tall">Hoch</option>
+                  <option value="large">Groß</option>
+                  <option value="full">Volle Breite</option>
+                </select>
+              </article>
+            );
+          })}
         </section>
       </aside>
     </div>
@@ -320,27 +345,54 @@ function WidgetSettingsPanel({
 
 function WidgetFrame({
   widget,
+  measuredHeight,
   dragState,
   onDragStart,
   onDragOver,
   onDrop,
   onDragEnd,
   onResizeStart,
+  onMeasuredHeight,
   children
 }: {
   widget: WidgetLayout;
+  measuredHeight?: number;
   dragState: { id: WidgetId; overId?: WidgetId; position?: DropPosition } | null;
   onDragStart: (event: React.DragEvent<HTMLElement>) => void;
   onDragOver: (event: React.DragEvent<HTMLElement>) => void;
   onDrop: (event: React.DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
-  onResizeStart: (event: React.PointerEvent<HTMLButtonElement>) => void;
+  onResizeStart: (event: React.PointerEvent<HTMLButtonElement>, widget: WidgetLayout) => void;
+  onMeasuredHeight: (id: WidgetId, height: number) => void;
   children: React.ReactNode;
 }) {
+  const widgetRef = useRef<HTMLElement | null>(null);
   const dropClass = dragState?.overId === widget.id ? `drop-${dragState.position}` : "";
+  const targetHeight = widget.customHeight ?? measuredHeight ?? getDefaultHeight(widget.size);
+  const widgetStyle: React.CSSProperties = {
+    gridRowEnd: `span ${heightToGridSpan(targetHeight)}`,
+    ...(widget.customHeight ? { height: `${widget.customHeight}px`, minHeight: `${widget.customHeight}px` } : {})
+  };
+
+  useEffect(() => {
+    const element = widgetRef.current;
+    if (!element) return;
+
+    const reportHeight = () => {
+      onMeasuredHeight(widget.id, Math.ceil(element.getBoundingClientRect().height));
+    };
+    reportHeight();
+
+    const observer = new ResizeObserver(reportHeight);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [onMeasuredHeight, widget.id]);
+
   return (
     <article
+      ref={widgetRef}
       className={`widget ${widget.size} ${widgetMeta[widget.id].accent} ${dragState?.id === widget.id ? "dragging" : ""} ${dropClass}`}
+      style={widgetStyle}
       draggable
       onDragStart={onDragStart}
       onDragOver={onDragOver}
@@ -358,9 +410,9 @@ function WidgetFrame({
       <button
         className="resize-handle"
         type="button"
-        aria-label={`${widgetMeta[widget.id].title} Größe mit der Maus ändern`}
+        aria-label={`${widgetMeta[widget.id].title} Höhe mit der Maus ändern`}
         draggable={false}
-        onPointerDown={onResizeStart}
+        onPointerDown={(event) => onResizeStart(event, widget)}
       />
     </article>
   );
@@ -648,6 +700,7 @@ function WaterWidget({ data }: { data: DashboardData }) {
         <Metric label="Gewässer" value={water.waterName} />
         <Metric label="Entfernung" value={formatDistance(water.distance)} />
         <Metric label="Status" value={translateWaterState(water.state)} />
+        <Metric label="Nächste Tide" value={formatNextTide(water.nextTide)} />
       </div>
       <WaterLevelChart history={water.history} unit={water.unit} />
     </>
@@ -949,32 +1002,32 @@ function getUpcomingHourIndexes(times: string[], count: number) {
   return Array.from({ length: count }, (_, offset) => startIndex + offset).filter((index) => index < times.length);
 }
 
-type WidgetWidth = "compact" | "wide" | "full";
-
-function sizeToDimensions(size: WidgetSize): { width: WidgetWidth; tall: boolean } {
-  return {
-    width: size === "full" ? "full" : size === "wide" || size === "large" ? "wide" : "compact",
-    tall: size === "tall" || size === "large"
-  };
+function getDefaultHeight(size: WidgetSize): number {
+  switch (size) {
+    case "mini":
+      return 200;
+    case "compact":
+      return 260;
+    case "wide":
+      return 260;
+    case "tall":
+      return 420;
+    case "large":
+      return 420;
+    case "full":
+      return 260;
+    default:
+      return 260;
+  }
 }
 
-function dimensionsToSize(width: WidgetWidth, tall: boolean): WidgetSize {
-  if (width === "full") return "full";
-  if (width === "wide" && tall) return "large";
-  if (width === "wide") return "wide";
-  if (tall) return "tall";
-  return "compact";
-}
-
-function getResizedWidth(initial: WidgetWidth, deltaX: number): WidgetWidth {
-  const widths: WidgetWidth[] = ["compact", "wide", "full"];
-  const initialIndex = widths.indexOf(initial);
-  const steps = deltaX > 180 ? 2 : deltaX > 70 ? 1 : deltaX < -180 ? -2 : deltaX < -70 ? -1 : 0;
-  return widths[Math.min(Math.max(initialIndex + steps, 0), widths.length - 1)];
+function heightToGridSpan(height: number) {
+  return Math.max(1, Math.ceil((height + GRID_GAP) / (GRID_AUTO_ROW_HEIGHT + GRID_GAP)));
 }
 
 function sizeLabel(size: WidgetSize) {
   const labels: Record<WidgetSize, string> = {
+    mini: "Mini",
     compact: "Kompakt",
     wide: "Breit",
     tall: "Hoch",
@@ -1010,6 +1063,11 @@ function formatMoonEvent(value: string | null, moon: DashboardData["moon"]) {
   if (moon.alwaysUp) return "immer oben";
   if (moon.alwaysDown) return "nicht sichtbar";
   return "n/a";
+}
+
+function formatNextTide(tide: NonNullable<DashboardData["water"]>["nextTide"]) {
+  if (!tide) return "keine Tide erkannt";
+  return `${tide.type === "high" ? "HW" : "NW"} ${formatHour(tide.time)}`;
 }
 
 function formatDateTime(value: string | number) {

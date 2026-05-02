@@ -217,8 +217,7 @@ h1 {
 
 .search button,
 .settings-toggle,
-.settings-panel-header button,
-.order-controls button {
+.settings-panel-header button {
   min-height: 48px;
   border-radius: 8px;
   padding: 0 16px;
@@ -255,13 +254,19 @@ h1 {
 
 .config-card {
   display: grid;
-  grid-template-columns: minmax(118px, 1fr) 112px 76px;
+  position: relative;
+  grid-template-columns: minmax(118px, 1fr) 112px;
   gap: 10px;
   align-items: center;
   min-height: 58px;
   padding: 10px 12px;
   border-radius: 8px;
   background: #fffef9;
+  cursor: grab;
+  transition:
+    box-shadow 140ms ease,
+    opacity 140ms ease,
+    transform 140ms ease;
 }
 
 .config-card label {
@@ -271,6 +276,59 @@ h1 {
   align-items: center;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.config-drag-handle {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  background: #edf1eb;
+  position: relative;
+}
+
+.config-drag-handle::before {
+  position: absolute;
+  inset: 5px;
+  background-image: radial-gradient(circle, #66756d 1.3px, transparent 1.5px);
+  background-size: 6px 6px;
+  content: "";
+}
+
+.config-card.dragging {
+  opacity: 0.5;
+  transform: scale(0.992);
+}
+
+.config-card.drop-before,
+.config-card.drop-after {
+  box-shadow: 0 0 0 2px rgba(23, 36, 30, 0.2);
+}
+
+.config-card.drop-before::before,
+.config-card.drop-after::before {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  z-index: 1;
+  height: 3px;
+  border-radius: 999px;
+  background: #17241e;
+  content: "";
+}
+
+.config-card.drop-before::before {
+  top: -8px;
+}
+
+.config-card.drop-after::before {
+  bottom: -8px;
+}
+
+.config-card.dragging,
+.config-card.dragging .config-drag-handle {
+  cursor: grabbing;
 }
 
 .config-card input[type="checkbox"] {
@@ -283,20 +341,6 @@ h1 {
   border: 1px solid rgba(22, 32, 27, 0.18);
   border-radius: 7px;
   background: #f9faf5;
-}
-
-.order-controls {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
-.order-controls button {
-  width: 35px;
-  min-height: 35px;
-  padding: 0;
-  font-size: 1.05rem;
-  line-height: 1;
 }
 
 .settings-overlay {
@@ -357,9 +401,10 @@ h1 {
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-rows: 10px;
   grid-auto-flow: dense;
   gap: 14px;
-  align-items: stretch;
+  align-items: start;
 }
 
 .widget {
@@ -374,10 +419,22 @@ h1 {
   background: rgba(255, 254, 249, 0.9);
   box-shadow: 0 16px 42px rgba(30, 43, 36, 0.08);
   backdrop-filter: blur(10px);
+  overflow: hidden;
   transition:
     box-shadow 160ms ease,
     opacity 160ms ease,
     transform 160ms ease;
+}
+
+.widget.mini {
+  grid-column: span 4;
+  min-height: 200px;
+  padding: 14px;
+  gap: 14px;
+}
+
+.widget.compact {
+  grid-column: span 4;
 }
 
 .widget.wide {
@@ -386,7 +443,6 @@ h1 {
 
 .widget.large {
   grid-column: span 8;
-  grid-row: span 2;
   min-height: 420px;
 }
 
@@ -395,8 +451,13 @@ h1 {
 }
 
 .widget.tall {
-  grid-row: span 2;
   min-height: 420px;
+}
+
+@media (max-width: 1180px) {
+  .widget.mini {
+    grid-column: span 6;
+  }
 }
 
 .widget.dragging {
@@ -539,31 +600,39 @@ h1 {
 
 .resize-handle {
   position: absolute;
-  right: 0;
   bottom: 0;
-  width: 24px;
-  height: 24px;
-  border-radius: 8px 0 8px 0;
+  left: 16px;
+  right: 16px;
+  width: auto;
+  height: 18px;
+  border-radius: 999px 999px 0 0;
   background:
-    linear-gradient(135deg, transparent 0 55%, rgba(23, 36, 30, 0.58) 55% 62%, transparent 62%),
-    linear-gradient(135deg, transparent 0 70%, rgba(23, 36, 30, 0.34) 70% 76%, transparent 76%);
-  cursor: nwse-resize;
+    linear-gradient(90deg, transparent, rgba(23, 36, 30, 0.12), transparent),
+    linear-gradient(180deg, transparent 0 8px, rgba(23, 36, 30, 0.5) 8px 11px, transparent 11px);
+  cursor: ns-resize;
   opacity: 0;
-  transform: translate(2px, 2px);
+  transform: translateY(4px);
   transition:
     opacity 140ms ease,
     transform 140ms ease;
 }
 
+.widget.mini .resize-handle {
+  left: 12px;
+  right: 12px;
+  height: 16px;
+}
+
 .widget:hover .resize-handle,
-.resize-handle:focus-visible {
+.resize-handle:focus-visible,
+.is-resizing-widget .resize-handle {
   opacity: 1;
-  transform: translate(0, 0);
+  transform: translateY(0);
 }
 
 .is-resizing-widget,
 .is-resizing-widget * {
-  cursor: nwse-resize !important;
+  cursor: ns-resize !important;
   user-select: none;
 }
 
@@ -1065,6 +1134,7 @@ footer {
   }
 
   .widget,
+  .widget.mini,
   .widget.wide,
   .widget.large,
   .widget.full {
@@ -1159,7 +1229,7 @@ footer {
   }
 
   .config-card {
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
     min-height: 54px;
     padding: 8px 10px;
@@ -1199,12 +1269,6 @@ footer {
     font-size: 1.4rem;
   }
 
-  .order-controls button {
-    width: 32px;
-    min-height: 32px;
-    font-size: 0.95rem;
-  }
-
   .dashboard-grid {
     grid-template-columns: repeat(8, minmax(0, 1fr));
     gap: 12px;
@@ -1218,13 +1282,10 @@ footer {
   }
 
   .widget.wide,
+  .widget.mini,
   .widget.large,
   .widget.full {
     grid-column: span 8;
-  }
-
-  .widget.tall {
-    grid-row: span 2;
   }
 
   .widget h2 {
@@ -1334,12 +1395,6 @@ footer {
   .config-card select {
     height: 30px;
     font-size: 13px;
-  }
-
-  .order-controls button {
-    width: 28px;
-    min-height: 28px;
-    font-size: 0.9rem;
   }
 
   .drag-grip {

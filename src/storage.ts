@@ -5,16 +5,16 @@ const STORAGE_KEY = "plz-grid-dashboard:v1";
 export const DEFAULT_WIDGETS: WidgetLayout[] = [
   { id: "place", enabled: true, size: "wide" },
   { id: "weather", enabled: true, size: "wide" },
-  { id: "dwdWeather", enabled: true, size: "wide" },
-  { id: "pollen", enabled: true, size: "wide" },
+  { id: "dwdWeather", enabled: true, size: "mini" },
+  { id: "pollen", enabled: true, size: "mini" },
   { id: "dwdPollen", enabled: true, size: "wide" },
-  { id: "air", enabled: true, size: "wide" },
+  { id: "air", enabled: true, size: "mini" },
   { id: "ubaAir", enabled: true, size: "wide" },
   { id: "warnings", enabled: true, size: "full" },
-  { id: "sun", enabled: true, size: "wide" },
-  { id: "moon", enabled: true, size: "wide" },
-  { id: "water", enabled: true, size: "wide" },
-  { id: "strom", enabled: true, size: "wide" },
+  { id: "sun", enabled: true, size: "mini" },
+  { id: "moon", enabled: true, size: "mini" },
+  { id: "water", enabled: true, size: "mini" },
+  { id: "strom", enabled: true, size: "mini" },
   { id: "insights", enabled: true, size: "full" }
 ];
 
@@ -41,7 +41,8 @@ export function loadSettings(): DashboardSettings {
       widgets: merged.map((widget) => ({
         id: widget.id,
         enabled: widget.enabled,
-        size: ["compact", "wide", "tall", "large", "full"].includes(widget.size) ? widget.size : "compact"
+        size: ["mini", "compact", "wide", "tall", "large", "full"].includes(widget.size) ? widget.size : "compact",
+        customHeight: typeof widget.customHeight === "number" ? widget.customHeight : undefined
       }))
     };
   } catch {

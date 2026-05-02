@@ -116,6 +116,12 @@ type PegelMeasurement = {
   value?: number;
 };
 
+type TideEstimate = {
+  time: string;
+  type: "high" | "low";
+  estimated: boolean;
+};
+
 declare global {
   interface Window {
     warnWetter?: {
@@ -525,6 +531,7 @@ async function getWaterLevel(location: LocationInfo): Promise<WaterLevelData | n
     value: numberOrNull(station.waterLevel.currentMeasurement.value),
     unit: station.waterLevel.unit ?? "cm",
     state: station.waterLevel.currentMeasurement.stateMnwMhw ?? "unknown",
+    nextTide: estimateNextTide(history),
     history
   };
 }
@@ -536,12 +543,93 @@ async function getWaterLevelHistory(uuid: string, timeseries: string) {
   if (!response.ok) return [];
   const data = (await response.json()) as PegelMeasurement[];
   return data
-    .slice(-64)
+    .slice(-192)
     .map((measurement) => ({
       time: measurement.timestamp ?? "",
       value: numberOrNull(measurement.value)
     }))
     .filter((measurement) => measurement.time);
+}
+
+function estimateNextTide(history: WaterLevelData["history"]): TideEstimate | null {
+  const points = history
+    .map((measurement) => ({
+      time: Date.parse(measurement.time),
+      value: measurement.value
+    }))
+    .filter((point): point is { time: number; value: number } => Number.isFinite(point.time) && point.value !== null)
+    .sort((a, b) => a.time - b.time);
+
+  if (points.length < 16) return null;
+
+  const extrema: Array<{ time: number; value: number; type: "high" | "low" }> = [];
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const previous = points[index - 1];
+    const current = points[index];
+    const next = points[index + 1];
+    if (current.value >= previous.value && current.value > next.value) {
+      extrema.push({ ...current, type: "high" });
+    } else if (current.value <= previous.value && current.value < next.value) {
+      extrema.push({ ...current, type: "low" });
+    }
+  }
+
+  const filtered = extrema.reduce<typeof extrema>((result, current) => {
+    const previous = result.at(-1);
+    if (!previous) return [current];
+    const hoursSincePrevious = (current.time - previous.time) / 3_600_000;
+    const valueChange = Math.abs(current.value - previous.value);
+    if (hoursSincePrevious < 3 || valueChange < 10) {
+      if (
+        previous.type === current.type &&
+        ((current.type === "high" && current.value > previous.value) || (current.type === "low" && current.value < previous.value))
+      ) {
+        result[result.length - 1] = current;
+      }
+      return result;
+    }
+    if (previous.type === current.type) {
+      result[result.length - 1] =
+        current.type === "high"
+          ? current.value > previous.value
+            ? current
+            : previous
+          : current.value < previous.value
+            ? current
+            : previous;
+      return result;
+    }
+    result.push(current);
+    return result;
+  }, []);
+
+  if (filtered.length < 3) return null;
+
+  const intervals = filtered
+    .slice(1)
+    .map((extremum, index) => extremum.time - filtered[index].time)
+    .filter((interval) => interval >= 4 * 3_600_000 && interval <= 9 * 3_600_000);
+
+  if (intervals.length < 2) return null;
+
+  const medianInterval = intervals.sort((a, b) => a - b)[Math.floor(intervals.length / 2)];
+  let lastExtremum = filtered.at(-1);
+  if (!lastExtremum) return null;
+
+  const latestMeasurementTime = points.at(-1)?.time ?? Date.now();
+  let nextTime = lastExtremum.time + medianInterval;
+  let nextType: "high" | "low" = lastExtremum.type === "high" ? "low" : "high";
+
+  while (nextTime <= latestMeasurementTime) {
+    nextTime += medianInterval;
+    nextType = nextType === "high" ? "low" : "high";
+  }
+
+  return {
+    time: new Date(nextTime).toISOString(),
+    type: nextType,
+    estimated: true
+  };
 }
 
 async function getStromGedacht(postalCode: string): Promise<StromGedachtData | null> {

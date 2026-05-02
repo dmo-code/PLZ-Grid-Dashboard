@@ -13,12 +13,13 @@ export type WidgetId =
   | "strom"
   | "moon";
 
-export type WidgetSize = "compact" | "wide" | "tall" | "large" | "full";
+export type WidgetSize = "mini" | "compact" | "wide" | "tall" | "large" | "full";
 
 export type WidgetLayout = {
   id: WidgetId;
   enabled: boolean;
   size: WidgetSize;
+  customHeight?: number; // in pixels, optional custom height
 };
 
 export type DashboardSettings = {
@@ -160,6 +161,11 @@ export type WaterLevelData = {
   value: number | null;
   unit: string;
   state: string;
+  nextTide: {
+    time: string;
+    type: "high" | "low";
+    estimated: boolean;
+  } | null;
   history: Array<{
     time: string;
     value: number | null;
