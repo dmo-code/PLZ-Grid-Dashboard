@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { loadDashboardData, searchLocationChoices, type LocationChoice } from "./api";
-import { loadSettings, loadWidgetPanelState, saveSettings, saveWidgetPanelState } from "./storage";
+import { loadSettings, loadWidgetPanelState, markHelpSeen, saveSettings, saveWidgetPanelState, shouldOpenHelpOnStart } from "./storage";
 import type { DashboardData, DashboardSettings, ThemeMode, WidgetId, WidgetLayout, WidgetSize, ModeType } from "./types";
 import "./styles.css";
 
@@ -71,6 +71,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [locationChoices, setLocationChoices] = useState<LocationChoice[]>([]);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(() => shouldOpenHelpOnStart());
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [dragState, setDragState] = useState<{
     id: WidgetId;
@@ -102,6 +103,11 @@ function App() {
     // Reset masonry layout when switching modes (widgets change)
     setMasonryLayout({});
     setMasonryHeight(0);
+  }, []);
+
+  const closeHelp = useCallback(() => {
+    markHelpSeen();
+    setHelpOpen(false);
   }, []);
 
   const refresh = useCallback(async (searchTerm: string, selectedPlace?: LocationChoice, options?: { background?: boolean }) => {
@@ -355,9 +361,14 @@ function App() {
               <button type="submit">Aktualisieren</button>
             </div>
           </form>
-          <button className="settings-toggle" type="button" onClick={() => setSettingsOpen(true)}>
-            Widgets
-          </button>
+          <div className="top-action-buttons">
+            <button className="help-toggle" type="button" onClick={() => setHelpOpen(true)}>
+              Hilfe
+            </button>
+            <button className="settings-toggle" type="button" onClick={() => setSettingsOpen(true)}>
+              Widgets
+            </button>
+          </div>
         </div>
       </header>
 
@@ -388,6 +399,8 @@ function App() {
           onThemeChange={(theme) => setSettings((current) => ({ ...current, theme }))}
         />
       )}
+
+      {helpOpen && <HelpPanel onClose={closeHelp} onOpenWidgets={() => setSettingsOpen(true)} />}
 
       {locationChoices.length > 1 && (
         <LocationChoicePanel
@@ -518,6 +531,56 @@ function normalizeDisplayValue(value: string) {
     .toLowerCase()
     .replace(/,\s*stadt\b/g, "")
     .trim();
+}
+
+function HelpPanel({ onClose, onOpenWidgets }: { onClose: () => void; onOpenWidgets: () => void }) {
+  return (
+    <div className="help-overlay" role="presentation" onClick={onClose}>
+      <aside className="help-panel" aria-label="Hilfe zu Ortblick" onClick={(event) => event.stopPropagation()}>
+        <div className="settings-panel-header">
+          <div>
+            <p className="eyebrow">Hilfe</p>
+            <h2>Ortblick nutzen</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Hilfe schließen">
+            ×
+          </button>
+        </div>
+        <div className="help-content">
+          <section>
+            <h3>Starten</h3>
+            <p>Gib eine deutsche PLZ oder einen Ort ein und aktualisiere die Daten. Bei mehreren PLZ öffnet sich eine Auswahl.</p>
+          </section>
+          <section>
+            <h3>Modus wechseln</h3>
+            <p>Das Badge unter dem Titel zeigt Standard oder Jagd. Ein Klick darauf öffnet das Widget-Panel, dort wechselst du den Modus.</p>
+          </section>
+          <section>
+            <h3>Widgets anpassen</h3>
+            <p>Im Widget-Panel kannst du Widgets ein- und ausschalten, Größen ändern, Reihenfolge ziehen und Rubriken einklappen.</p>
+          </section>
+          <section>
+            <h3>Aktualisierung</h3>
+            <p>Ortblick lädt beim Öffnen neue Daten und aktualisiert automatisch, wenn du nach längerer Zeit zur App zurückkehrst.</p>
+          </section>
+        </div>
+        <div className="help-actions">
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onOpenWidgets();
+            }}
+          >
+            Widgets öffnen
+          </button>
+          <button type="button" className="secondary-action" onClick={onClose}>
+            Verstanden
+          </button>
+        </div>
+      </aside>
+    </div>
+  );
 }
 
 function WidgetSettingsPanel({

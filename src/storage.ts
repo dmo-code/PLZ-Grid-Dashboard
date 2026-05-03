@@ -2,6 +2,7 @@ import type { DashboardSettings, ThemeMode, WidgetId, WidgetLayout, ModeConfigur
 
 const STORAGE_KEY = "plz-grid-dashboard:v2";
 const WIDGET_PANEL_STATE_KEY = "plz-grid-dashboard:widget-panel:v1";
+const HELP_SEEN_KEY = "plz-grid-dashboard:help-seen:v1";
 
 // Standard Mode: Weather, place, and environment data
 export const DEFAULT_STANDARD_CONFIG: ModeConfiguration = {
@@ -127,6 +128,22 @@ export function loadWidgetPanelState(categoryIds: string[]) {
 
 export function saveWidgetPanelState(collapsedCategories: Record<string, boolean>) {
   window.localStorage.setItem(WIDGET_PANEL_STATE_KEY, JSON.stringify(collapsedCategories));
+}
+
+export function shouldOpenHelpOnStart() {
+  try {
+    return !window.localStorage.getItem(STORAGE_KEY) && window.localStorage.getItem(HELP_SEEN_KEY) !== "true";
+  } catch {
+    return true;
+  }
+}
+
+export function markHelpSeen() {
+  try {
+    window.localStorage.setItem(HELP_SEEN_KEY, "true");
+  } catch {
+    // Ignore blocked storage; the help can still be closed for the current session.
+  }
 }
 
 function normalizeConfig(config: ModeConfiguration | undefined, defaults: ModeConfiguration): ModeConfiguration {

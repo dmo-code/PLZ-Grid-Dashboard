@@ -218,6 +218,12 @@ button:disabled {
   align-items: end;
 }
 
+.top-action-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+}
+
 .eyebrow {
   margin: 0 0 8px;
   color: #5d6c63;
@@ -302,6 +308,7 @@ h1 {
 
 .search input,
 .search button,
+.help-toggle,
 .settings-toggle,
 .config-card,
 .widget {
@@ -319,6 +326,7 @@ h1 {
 }
 
 .search button,
+.help-toggle,
 .settings-toggle,
 .settings-panel-header button {
   min-height: 48px;
@@ -327,6 +335,12 @@ h1 {
   background: var(--button-bg);
   color: var(--button-fg);
   font-weight: 800;
+}
+
+.help-toggle {
+  min-width: 82px;
+  background: var(--surface-solid);
+  color: var(--text);
 }
 
 .settings-toggle {
@@ -340,6 +354,7 @@ h1 {
 }
 
 .theme-dark .search button,
+.theme-dark .help-toggle,
 .theme-dark .settings-toggle,
 .theme-dark .settings-panel-header button,
 .theme-dark .scroll-top-button {
@@ -416,6 +431,76 @@ h1 {
   overflow-y: auto;
   background: var(--surface-panel);
   box-shadow: -24px 0 64px rgba(17, 27, 22, 0.22);
+}
+
+.help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 22;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(17, 27, 22, 0.32);
+}
+
+.help-panel {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  width: min(480px, 100%);
+  min-height: 100%;
+  padding: 24px;
+  overflow-y: auto;
+  background: var(--surface-panel);
+  box-shadow: -24px 0 64px rgba(17, 27, 22, 0.22);
+}
+
+.help-content {
+  display: grid;
+  gap: 14px;
+}
+
+.help-content section {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.help-content h3,
+.help-content p {
+  margin: 0;
+}
+
+.help-content h3 {
+  font-size: 1rem;
+}
+
+.help-content p {
+  color: var(--muted-strong);
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.help-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.help-actions button {
+  min-height: 46px;
+  border-radius: 8px;
+  padding: 0 14px;
+  background: var(--button-bg);
+  color: var(--button-fg);
+  font-weight: 900;
+}
+
+.help-actions .secondary-action {
+  background: var(--surface-solid);
+  color: var(--text);
+  border: 1px solid var(--border);
 }
 
 .status-strip {
@@ -1666,6 +1751,7 @@ footer {
   .search,
   .settings-panel,
   .location-choice-drawer,
+  .help-panel,
   .widget {
     width: 100%;
     max-width: 100%;
@@ -1698,14 +1784,22 @@ footer {
     gap: 8px;
   }
 
+  .top-action-buttons,
+  .help-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
   .search input,
   .search button,
+  .help-toggle,
   .settings-toggle {
     min-height: 44px;
     font-size: 16px; /* Prevents auto-zoom on iOS */
   }
 
   .search button,
+  .help-toggle,
   .settings-toggle {
     padding: 0 12px;
   }
@@ -1741,13 +1835,15 @@ footer {
     font-size: 14px;
   }
 
+  .help-toggle,
   .settings-toggle {
     width: 100%;
     min-width: auto;
   }
 
   .settings-panel,
-  .location-choice-drawer {
+  .location-choice-drawer,
+  .help-panel {
     width: 100%;
     padding: 16px 12px;
     box-shadow: -16px 0 48px rgba(17, 27, 22, 0.16);
