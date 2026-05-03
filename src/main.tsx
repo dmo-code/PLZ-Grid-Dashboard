@@ -110,6 +110,11 @@ function App() {
     setHelpOpen(false);
   }, []);
 
+  const clearPostalSearch = useCallback(() => {
+    setPostalInput("");
+    setLocationChoices([]);
+  }, []);
+
   const refresh = useCallback(async (searchTerm: string, selectedPlace?: LocationChoice, options?: { background?: boolean }) => {
     const isBackgroundRefresh = options?.background === true;
 
@@ -352,6 +357,7 @@ function App() {
                 id="postalCode"
                 inputMode="search"
                 value={postalInput}
+                onFocus={clearPostalSearch}
                 onChange={(event) => {
                   setPostalInput(event.target.value);
                   setLocationChoices([]);
