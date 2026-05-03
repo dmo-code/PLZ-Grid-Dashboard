@@ -27,8 +27,6 @@ const widgetMeta: Record<WidgetId, { title: string; accent: string }> = {
   sun: { title: "Sonne", accent: "rose" },
   moon: { title: "Mond", accent: "moon" },
   water: { title: "Pegel", accent: "water" },
-  strom: { title: "StromGedacht", accent: "energy" },
-  insights: { title: "Smart Insights", accent: "violet" },
   wind: { title: "Wind", accent: "sky" },
   humidity: { title: "Luftfeuchte", accent: "water" }
 };
@@ -60,8 +58,7 @@ const widgetCategories = [
   { id: "weather", title: "Wetter", ids: ["weather", "dwdWeather", "warnings"] as WidgetId[] },
   { id: "air", title: "Luft & Umwelt", ids: ["pollen", "dwdPollen", "air", "ubaAir", "humidity"] as WidgetId[] },
   { id: "sunMoon", title: "Sonne & Mond", ids: ["sun", "moon"] as WidgetId[] },
-  { id: "waterEnergy", title: "Wasser & Energie", ids: ["water", "strom"] as WidgetId[] },
-  { id: "insights", title: "Smart Insights", ids: ["insights"] as WidgetId[] },
+  { id: "waterEnergy", title: "Wasser", ids: ["water"] as WidgetId[] },
   { id: "hunt", title: "Jagd", ids: ["moon", "weather", "sun", "warnings", "air", "pollen", "wind", "humidity"] as WidgetId[] }
 ];
 
@@ -299,10 +296,17 @@ function App() {
       <div className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Kostenlose Datenquellen · ohne Login</p>
-          <h1>PLZ Grid Dashboard</h1>
+          <h1>Ortblick</h1>
           <p className="weather-mood">
             {weatherTheme.label}
+            <button
+              type="button"
+              className={`mode-status-badge ${currentMode === "hunting" ? "hunting" : ""}`}
+              onClick={() => setSettingsOpen(true)}
+              aria-label={`Widget-Panel öffnen, aktueller Modus: ${currentMode === "hunting" ? "Jagd" : "Standard"}`}
+            >
+              {currentMode === "hunting" ? "Jagd" : "Standard"}
+            </button>
           </p>
         </div>
         <div className="top-actions">
@@ -409,7 +413,7 @@ function App() {
       </section>
 
       <footer>
-        Daten: OpenPLZ, Zippopotam.us, Open-Meteo, Bright Sky/DWD, DWD Open Data, UBA, PEGELONLINE, StromGedacht und lokale SunCalc-Mondberechnung.
+        Daten: OpenPLZ, Zippopotam.us, Open-Meteo, Bright Sky/DWD, DWD Open Data, UBA, PEGELONLINE und lokale SunCalc-Mondberechnung.
       </footer>
       <button
         className={`scroll-top-button ${showScrollTop ? "visible" : ""}`}
@@ -736,31 +740,8 @@ function renderWidget(id: WidgetId, data: DashboardData) {
       return <MoonWidget data={data} />;
     case "water":
       return <WaterWidget data={data} />;
-    case "strom":
-      return <StromWidget data={data} />;
-    case "insights":
-      return <InsightsWidget data={data} />;
-    case "wind": {
-      const windSpeed = data.weather.current.windSpeed;
-      const windDirection = data.weather.current.windDirection ?? 0;
-      if (windSpeed === null) return <p className="empty">Keine Daten</p>;
-      const windDirections = ["N", "NNO", "NO", "ONO", "O", "OSO", "SO", "SSO", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
-      const dirIndex = Math.round(windDirection / 22.5) % 16;
-      const dirLabel = windDirections[dirIndex];
-      return (
-        <>
-          <div style={{ textAlign: "center", fontSize: "3rem", transform: `rotate(${windDirection}deg)`, display: "inline-block", width: "100%", transition: "transform 0.3s ease" }}>
-            ↓
-          </div>
-          <div style={{ textAlign: "center", fontSize: "1.4rem", fontWeight: 800, marginTop: "12px" }}>
-            {windSpeed.toFixed(1)} m/s
-          </div>
-          <div style={{ textAlign: "center", color: "var(--muted)", fontSize: "0.95rem", marginTop: "6px" }}>
-            {dirLabel}
-          </div>
-        </>
-      );
-    }
+    case "wind":
+      return <WindWidget data={data} />;
     case "humidity": {
       const humidity = data.weather.current.humidity;
       if (humidity === null) return <p className="empty">Keine Daten</p>;
@@ -777,6 +758,53 @@ function renderWidget(id: WidgetId, data: DashboardData) {
       );
     }
   }
+}
+
+function WindWidget({ data }: { data: DashboardData }) {
+  const weather = data.weather;
+  const windSpeed = weather.current.windSpeed;
+  const windDirection = weather.current.windDirection;
+  if (windSpeed === null) return <p className="empty">Keine Winddaten verfügbar.</p>;
+
+  const direction = windDirection !== null ? getWindDirection(windDirection) : null;
+  const beaufort = getBeaufort(windSpeed);
+  const currentGust = weather.current.windGusts ?? data.brightSky?.windGust ?? null;
+  const maxSpeedToday = weather.daily.windSpeedMax[0] ?? maxToday(weather.hourly.time, weather.hourly.windSpeed);
+  const maxGustToday = weather.daily.windGustsMax[0] ?? maxToday(weather.hourly.time, weather.hourly.windGusts);
+  const dominantDirection = weather.daily.windDirectionDominant[0];
+  const trend = getWindTrend(weather.current.time, weather.hourly.time, weather.hourly.windSpeed);
+  const nextGust = getNextHourlyValue(weather.current.time, weather.hourly.time, weather.hourly.windGusts);
+  const dwdDistance = data.brightSky?.distance;
+
+  return (
+    <div className="wind-widget">
+      <div className="wind-compass" aria-hidden="true">
+        <span style={{ transform: `rotate(${windDirection ?? 0}deg)` }}>↓</span>
+      </div>
+      <div className="hero-metric wind-hero">
+        <strong>{formatNumber(windSpeed, " km/h")}</strong>
+        <span>{[direction?.short, beaufort.label, `${beaufort.value} Bft`].filter(Boolean).join(" · ")}</span>
+      </div>
+      <div className="metric-row">
+        <Metric label="Böe jetzt" value={formatNumber(currentGust, " km/h")} />
+        <Metric label="Max heute" value={formatNumber(maxSpeedToday, " km/h")} />
+        <Metric label="Böe max" value={formatNumber(maxGustToday, " km/h")} />
+      </div>
+      <div className="detail-list">
+        <Metric label="Richtung" value={direction ? `${direction.long} (${Math.round(windDirection ?? 0)}°)` : "n/a"} />
+        <Metric
+          label="Tagesrichtung"
+          value={dominantDirection === null || dominantDirection === undefined ? "n/a" : getWindDirection(dominantDirection).long}
+        />
+        <Metric label="Trend 3h" value={trend} />
+        <Metric label="Nächste Böe" value={formatNumber(nextGust, " km/h")} />
+        <Metric
+          label="DWD-Station"
+          value={dwdDistance === null || dwdDistance === undefined ? "n/a" : `${data.brightSky?.stationName ?? "DWD"} · ${formatDistance(dwdDistance)}`}
+        />
+      </div>
+    </div>
+  );
 }
 
 function PlaceWidget({ data }: { data: DashboardData }) {
@@ -1035,57 +1063,6 @@ function WaterWidget({ data }: { data: DashboardData }) {
       <WaterLevelChart history={water.history} unit={water.unit} />
     </>
   );
-}
-
-function StromWidget({ data }: { data: DashboardData }) {
-  const strom = data.strom;
-  if (!strom) return <p className="empty">StromGedacht liefert für diese PLZ gerade keine Daten.</p>;
-  return (
-    <>
-      <div className="hero-metric">
-        <strong>{stromStateShort(strom.state)}</strong>
-        <span>{stromStateLabel(strom.state)}</span>
-      </div>
-      <div className="metric-row">
-        <Metric label="Last" value={formatNumber(strom.load, " MW")} />
-        <Metric label="Erneuerbar" value={formatNumber(strom.renewableEnergy, " MW")} />
-        <Metric label="Residuallast" value={formatNumber(strom.residualLoad, " MW")} />
-      </div>
-    </>
-  );
-}
-
-function InsightsWidget({ data }: { data: DashboardData }) {
-  return (
-    <ul className="insights">
-      {buildInsights(data).map((insight) => (
-        <li key={insight}>{insight}</li>
-      ))}
-    </ul>
-  );
-}
-
-function buildInsights(data: DashboardData) {
-  const insights: string[] = [];
-  const current = data.weather.current;
-  const today = data.weather.daily;
-  const pollenPeak = Math.max(
-    maxToday(data.air.hourly.time, data.air.hourly.birch) ?? 0,
-    maxToday(data.air.hourly.time, data.air.hourly.grass) ?? 0,
-    maxToday(data.air.hourly.time, data.air.hourly.ragweed) ?? 0
-  );
-
-  if ((current.windSpeed ?? 0) >= 45) insights.push("Wind im Blick behalten: Böen können lose Gegenstände bewegen.");
-  if ((today.precipitationSum[0] ?? 0) >= 8) insights.push("Regentag wahrscheinlich: Wege und Pendelzeiten großzügiger planen.");
-  if ((data.air.current.europeanAqi ?? 0) > 60) insights.push("Luftqualität ist mäßig bis schlecht: intensive Aktivitäten draußen eher verschieben.");
-  if (pollenPeak > 50) insights.push("Pollenbelastung hoch: Lüften eher nach Regen oder spät am Abend.");
-  if ((today.uvIndexMax[0] ?? 0) >= 6) insights.push("UV-Schutz einplanen, besonders um die Mittagszeit.");
-  if (data.warnings.length > 0) insights.push("Aktive DWD-Hinweise gefunden: Warnungswidget vor längeren Wegen prüfen.");
-  if (data.strom?.state === -1) insights.push("StromGedacht meldet Supergrün: flexible Verbraucher jetzt einplanen.");
-  if (data.water?.state === "high") insights.push("Der nächstgelegene Pegel meldet hohen Wasserstand.");
-  if (insights.length === 0) insights.push("Keine auffälligen Signale: Wetter, Luft und Pollen wirken aktuell unkritisch.");
-
-  return insights;
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -1386,6 +1363,66 @@ function maxToday(times: string[], values: Array<number | null>) {
   return todaysValues.length ? Math.max(...todaysValues) : null;
 }
 
+function getNextHourlyValue(currentTime: string, times: string[], values: Array<number | null>) {
+  const currentIndex = times.findIndex((time) => time >= currentTime);
+  const startIndex = currentIndex >= 0 ? currentIndex : 0;
+  return values.slice(startIndex, startIndex + 4).find((value) => value !== null) ?? null;
+}
+
+function getWindTrend(currentTime: string, times: string[], values: Array<number | null>) {
+  const currentIndex = times.findIndex((time) => time >= currentTime);
+  const startIndex = currentIndex >= 0 ? currentIndex : 0;
+  const nextValues = values.slice(startIndex, startIndex + 4).filter((value): value is number => value !== null);
+  if (nextValues.length < 2) return "n/a";
+
+  const change = nextValues[nextValues.length - 1] - nextValues[0];
+  if (change >= 5) return "steigend";
+  if (change <= -5) return "fallend";
+  return "stabil";
+}
+
+function getWindDirection(degrees: number) {
+  const directions = [
+    { short: "N", long: "Nord" },
+    { short: "NNO", long: "Nordnordost" },
+    { short: "NO", long: "Nordost" },
+    { short: "ONO", long: "Ostnordost" },
+    { short: "O", long: "Ost" },
+    { short: "OSO", long: "Ostsüdost" },
+    { short: "SO", long: "Südost" },
+    { short: "SSO", long: "Südsüdost" },
+    { short: "S", long: "Süd" },
+    { short: "SSW", long: "Südsüdwest" },
+    { short: "SW", long: "Südwest" },
+    { short: "WSW", long: "Westsüdwest" },
+    { short: "W", long: "West" },
+    { short: "WNW", long: "Westnordwest" },
+    { short: "NW", long: "Nordwest" },
+    { short: "NNW", long: "Nordnordwest" }
+  ];
+  return directions[Math.round(degrees / 22.5) % directions.length];
+}
+
+function getBeaufort(speedKmh: number) {
+  const scale = [
+    { max: 1, label: "Windstille" },
+    { max: 5, label: "leiser Zug" },
+    { max: 11, label: "leichte Brise" },
+    { max: 19, label: "schwache Brise" },
+    { max: 28, label: "mäßige Brise" },
+    { max: 38, label: "frische Brise" },
+    { max: 49, label: "starker Wind" },
+    { max: 61, label: "steifer Wind" },
+    { max: 74, label: "stürmischer Wind" },
+    { max: 88, label: "Sturm" },
+    { max: 102, label: "schwerer Sturm" },
+    { max: 117, label: "orkanartiger Sturm" },
+    { max: Infinity, label: "Orkan" }
+  ];
+  const value = scale.findIndex((item) => speedKmh <= item.max);
+  return { value, label: scale[value].label };
+}
+
 function formatNumber(value: number | null | undefined, unit: string) {
   if (value === null || value === undefined) return "n/a";
   return `${Math.round(value)}${unit}`;
@@ -1496,22 +1533,6 @@ function translateWaterState(value: string) {
     unknown: "unbekannt"
   };
   return labels[value] ?? value;
-}
-
-function stromStateShort(value: number | null) {
-  if (value === -1) return "Supergrün";
-  if (value === 1) return "Grün";
-  if (value === 3) return "Orange";
-  if (value === 4) return "Rot";
-  return "n/a";
-}
-
-function stromStateLabel(value: number | null) {
-  if (value === -1) return "Strom jetzt flexibel nutzen";
-  if (value === 1) return "Normalbetrieb";
-  if (value === 3) return "Verbrauch möglichst reduzieren";
-  if (value === 4) return "Strommangel vermeiden";
-  return "kein Status";
 }
 
 function formatDistance(value: number) {

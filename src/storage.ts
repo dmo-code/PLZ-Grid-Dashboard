@@ -17,8 +17,6 @@ export const DEFAULT_STANDARD_CONFIG: ModeConfiguration = {
     { id: "sun", enabled: true, size: "mini" },
     { id: "moon", enabled: true, size: "mini" },
     { id: "water", enabled: true, size: "mini" },
-    { id: "strom", enabled: true, size: "mini" },
-    { id: "insights", enabled: true, size: "mini" },
     { id: "wind", enabled: false, size: "compact" },
     { id: "humidity", enabled: false, size: "compact" }
   ],
@@ -69,13 +67,15 @@ export function loadSettings(): DashboardSettings {
         theme: themeModes.has(parsed.theme as ThemeMode) ? (parsed.theme as ThemeMode) : DEFAULT_THEME,
         currentMode: (parsed as any).huntMode ? "hunting" : "standard",
         standardConfig: {
-          widgets: oldWidgets.map((widget) => ({
-            id: widget.id,
-            enabled: widget.enabled,
-            size: ["mini", "compact", "wide", "tall", "large", "full"].includes(widget.size)
-              ? widget.size
-              : "compact"
-          })),
+          widgets: oldWidgets
+            .filter((widget) => widgetIds.has(widget.id))
+            .map((widget) => ({
+              id: widget.id,
+              enabled: widget.enabled,
+              size: ["mini", "compact", "wide", "tall", "large", "full"].includes(widget.size)
+                ? widget.size
+                : "compact"
+            })),
           customHeight: {}
         },
         huntingConfig: DEFAULT_HUNTING_CONFIG

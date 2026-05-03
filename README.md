@@ -1,6 +1,6 @@
-# PLZ Grid Dashboard
+# Ortblick
 
-Responsive React/TypeScript dashboard for German postal codes. The app stores postal code, enabled widgets, widget order and widget sizes in `localStorage`, so it works without login or backend.
+Responsive React/TypeScript dashboard for German places and postal codes. Ortblick stores postal code, enabled widgets, widget order and widget sizes in `localStorage`, so it works without login or backend.
 
 ## Free data sources
 
@@ -14,7 +14,6 @@ Responsive React/TypeScript dashboard for German postal codes. The app stores po
 - Weather warnings: [DWD warnings JSONP](https://www.dwd.de/DWD/warnungen/warnapp/json/warnings.json)
 - Official pollen hazard index: [DWD Open Data](https://opendata.dwd.de/climate_environment/health/alerts/s31fg.json)
 - Water levels: [PEGELONLINE](https://www.pegelonline.wsv.de/webservices/rest-api/v2/)
-- Grid state: [StromGedacht API](https://www.stromgedacht.de/api-docs)
 
 No paid APIs or API keys are used.
 

@@ -1,7 +1,7 @@
 {
-  "name": "PLZ Grid Dashboard",
-  "short_name": "PLZ Grid",
-  "description": "PLZ-basiertes Grid-Dashboard mit Wetter, Pollenflug, Luftqualitaet, Warnungen und Smart Insights.",
+  "name": "Ortblick",
+  "short_name": "Ortblick",
+  "description": "Ortblick zeigt Wetter, Pollenflug, Luftqualitaet, Warnungen und Naturdaten fuer deutsche Orte und PLZ.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

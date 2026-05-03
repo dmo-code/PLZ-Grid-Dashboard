@@ -4,13 +4,11 @@ export type WidgetId =
   | "air"
   | "warnings"
   | "sun"
-  | "insights"
   | "place"
   | "dwdWeather"
   | "dwdPollen"
   | "ubaAir"
   | "water"
-  | "strom"
   | "moon"
   | "wind"
   | "humidity";
@@ -67,12 +65,16 @@ export type WeatherData = {
     weatherCode: number | null;
     windSpeed: number | null;
     windDirection: number | null;
+    windGusts: number | null;
   };
   hourly: {
     time: string[];
     temperature: Array<number | null>;
     precipitationProbability: Array<number | null>;
     weatherCode: Array<number | null>;
+    windSpeed: Array<number | null>;
+    windDirection: Array<number | null>;
+    windGusts: Array<number | null>;
   };
   daily: {
     time: string[];
@@ -82,6 +84,9 @@ export type WeatherData = {
     temperatureMin: Array<number | null>;
     precipitationSum: Array<number | null>;
     uvIndexMax: Array<number | null>;
+    windSpeedMax: Array<number | null>;
+    windGustsMax: Array<number | null>;
+    windDirectionDominant: Array<number | null>;
   };
 };
 
@@ -184,14 +189,6 @@ export type WaterLevelData = {
   }>;
 };
 
-export type StromGedachtData = {
-  state: number | null;
-  load: number | null;
-  renewableEnergy: number | null;
-  residualLoad: number | null;
-  superGreenThreshold: number | null;
-};
-
 export type MoonData = {
   phase: number;
   phaseName: string;
@@ -216,7 +213,6 @@ export type DashboardData = {
   dwdPollen: DwdPollenData | null;
   ubaAir: UbaAirData | null;
   water: WaterLevelData | null;
-  strom: StromGedachtData | null;
   moon: MoonData;
   updatedAt: string;
 };
