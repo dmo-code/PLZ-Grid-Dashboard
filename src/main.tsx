@@ -8,6 +8,7 @@ import "./styles.css";
 type DropPosition = "before" | "after";
 
 const MASONRY_GAP = 14;
+const AUTO_REFRESH_MAX_AGE_MS = 15 * 60 * 1000;
 
 type MasonryItemLayout = {
   left: number;
@@ -103,9 +104,60 @@ function App() {
     setMasonryHeight(0);
   }, []);
 
+  const refresh = useCallback(async (searchTerm: string, selectedPlace?: LocationChoice) => {
+    if (!searchTerm) {
+      setError("Bitte gib eine deutsche PLZ oder einen Ort ein.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const isPostalCode = /^\d{5}$/.test(searchTerm);
+      if (!selectedPlace && !isPostalCode) {
+        const choices = await searchLocationChoices(searchTerm);
+        if (choices.length > 1) {
+          setLocationChoices(choices);
+          setLoading(false);
+          return;
+        }
+        if (choices.length === 0) {
+          throw new Error("Zu diesem Ort wurde keine PLZ gefunden.");
+        }
+        selectedPlace = choices[0];
+      }
+
+      const dashboardData = await loadDashboardData(selectedPlace?.postalCode ?? searchTerm, selectedPlace);
+      setData(dashboardData);
+      setPostalInput(dashboardData.location.postalCode);
+      setLocationChoices([]);
+      setSettings((current) => ({ ...current, postalCode: dashboardData.location.postalCode }));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Die Daten konnten nicht geladen werden.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void refresh(settings.postalCode);
-  }, []);
+  }, [refresh]);
+
+  useEffect(() => {
+    const refreshIfStale = () => {
+      if (document.visibilityState !== "visible") return;
+      if (!data) return;
+      if (Date.now() - new Date(data.updatedAt).getTime() < AUTO_REFRESH_MAX_AGE_MS) return;
+      void refresh(settings.postalCode);
+    };
+
+    window.addEventListener("focus", refreshIfStale);
+    document.addEventListener("visibilitychange", refreshIfStale);
+    return () => {
+      window.removeEventListener("focus", refreshIfStale);
+      document.removeEventListener("visibilitychange", refreshIfStale);
+    };
+  }, [data, refresh, settings.postalCode]);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -216,41 +268,6 @@ function App() {
     },
     [updateMasonryLayout]
   );
-
-  async function refresh(searchTerm: string, selectedPlace?: LocationChoice) {
-    if (!searchTerm) {
-      setError("Bitte gib eine deutsche PLZ oder einen Ort ein.");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
-      const isPostalCode = /^\d{5}$/.test(searchTerm);
-      if (!selectedPlace && !isPostalCode) {
-        const choices = await searchLocationChoices(searchTerm);
-        if (choices.length > 1) {
-          setLocationChoices(choices);
-          setLoading(false);
-          return;
-        }
-        if (choices.length === 0) {
-          throw new Error("Zu diesem Ort wurde keine PLZ gefunden.");
-        }
-        selectedPlace = choices[0];
-      }
-
-      const dashboardData = await loadDashboardData(selectedPlace?.postalCode ?? searchTerm, selectedPlace);
-      setData(dashboardData);
-      setPostalInput(dashboardData.location.postalCode);
-      setLocationChoices([]);
-      setSettings((current) => ({ ...current, postalCode: dashboardData.location.postalCode }));
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Die Daten konnten nicht geladen werden.");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   function updateWidget(id: WidgetId, patch: Partial<WidgetLayout>) {
     setSettings((current) => {
