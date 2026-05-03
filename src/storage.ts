@@ -7,8 +7,8 @@ const HELP_SEEN_KEY = "plz-grid-dashboard:help-seen:v1";
 // Standard Mode: Weather, place, and environment data
 export const DEFAULT_STANDARD_CONFIG: ModeConfiguration = {
   widgets: [
-    { id: "place", enabled: true, size: "mini" },
     { id: "weather", enabled: true, size: "mini" },
+    { id: "place", enabled: true, size: "mini" },
     { id: "dwdWeather", enabled: true, size: "mini" },
     { id: "pollen", enabled: true, size: "mini" },
     { id: "dwdPollen", enabled: true, size: "mini" },

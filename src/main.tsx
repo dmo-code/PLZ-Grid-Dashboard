@@ -549,7 +549,7 @@ function HelpPanel({ onClose, onOpenWidgets }: { onClose: () => void; onOpenWidg
         <div className="help-content">
           <section>
             <h3>Starten</h3>
-            <p>Gib eine deutsche PLZ oder einen Ort ein und aktualisiere die Daten. Bei mehreren PLZ öffnet sich eine Auswahl.</p>
+            <p>Ortblick funktioniert für Orte und Postleitzahlen in Deutschland. Gib eine deutsche PLZ oder einen Ort ein und aktualisiere die Daten. Bei mehreren PLZ öffnet sich eine Auswahl.</p>
           </section>
           <section>
             <h3>Modus wechseln</h3>
