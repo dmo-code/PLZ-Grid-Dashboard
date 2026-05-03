@@ -5,6 +5,7 @@ Responsive React/TypeScript dashboard for German places and postal codes. Ortbli
 ## Features
 
 - Search by German postal code or place name, with a side panel for ambiguous postal-code results.
+- First-run help panel plus a persistent help button for returning users.
 - Standard and hunting modes with separate widget layouts.
 - Configurable widgets with drag-and-drop ordering, sizes and collapsible settings sections.
 - Automatic refresh when the app becomes visible again and the current data is older than 15 minutes.
@@ -16,6 +17,7 @@ Responsive React/TypeScript dashboard for German places and postal codes. Ortbli
 
 - Postal code lookup: [Zippopotam.us](https://docs.zippopotam.us/)
 - Administrative postal code context: [OpenPLZ API](https://www.openplzapi.org/de/)
+- Coordinate fallback for invalid postal-code coordinates: [Open-Meteo Geocoding API](https://open-meteo.com/en/docs/geocoding-api)
 - Weather and sunrise/sunset: [Open-Meteo Forecast API](https://open-meteo.com/)
 - Moon phase, position and rise/set: local calculations based on [SunCalc](https://github.com/mourner/suncalc)
 - Official DWD weather observations: [Bright Sky](https://brightsky.dev/)
