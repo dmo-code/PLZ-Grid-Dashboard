@@ -817,6 +817,34 @@ h1 {
   border-color: #8b4513;
 }
 
+.widget-panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -6px;
+}
+
+.widget-panel-actions button {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.widget-panel-actions button:hover:not(:disabled) {
+  border-color: var(--border);
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.widget-panel-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .hunt-mode-indicator {
   display: inline-flex;
   align-items: center;

@@ -302,6 +302,20 @@ function App() {
     });
   }
 
+  function enableAllWidgets() {
+    setSettings((current) => {
+      const isHunting = current.currentMode === "hunting";
+      const config = isHunting ? current.huntingConfig : current.standardConfig;
+      return {
+        ...current,
+        [isHunting ? "huntingConfig" : "standardConfig"]: {
+          ...config,
+          widgets: config.widgets.map((widget) => ({ ...widget, enabled: true }))
+        }
+      };
+    });
+  }
+
   function moveWidgetTo(id: WidgetId, targetId: WidgetId, position: DropPosition) {
     if (id === targetId) return;
     setSettings((current) => {
@@ -402,6 +416,7 @@ function App() {
           onClose={() => setSettingsOpen(false)}
           onMoveTo={moveWidgetTo}
           onUpdate={updateWidget}
+          onEnableAll={enableAllWidgets}
           onThemeChange={(theme) => setSettings((current) => ({ ...current, theme }))}
         />
       )}
@@ -597,6 +612,7 @@ function WidgetSettingsPanel({
   onClose,
   onMoveTo,
   onUpdate,
+  onEnableAll,
   onThemeChange
 }: {
   widgets: WidgetLayout[];
@@ -606,6 +622,7 @@ function WidgetSettingsPanel({
   onClose: () => void;
   onMoveTo: (id: WidgetId, targetId: WidgetId, position: DropPosition) => void;
   onUpdate: (id: WidgetId, patch: Partial<WidgetLayout>) => void;
+  onEnableAll: () => void;
   onThemeChange: (theme: ThemeMode) => void;
 }) {
   const [settingsDragState, setSettingsDragState] = useState<{
@@ -616,6 +633,7 @@ function WidgetSettingsPanel({
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>(() =>
     loadWidgetPanelState(widgetCategories.map((category) => category.id))
   );
+  const allWidgetsEnabled = widgets.every((widget) => widget.enabled);
 
   const toggleCategory = (categoryId: string) => {
     setCollapsedCategories((current) => {
@@ -664,6 +682,11 @@ function WidgetSettingsPanel({
               🦌 Jagd
             </button>
           </div>
+        </div>
+        <div className="widget-panel-actions">
+          <button type="button" onClick={onEnableAll} disabled={allWidgetsEnabled}>
+            Alle Widgets aktivieren
+          </button>
         </div>
         <section className="config-panel">
           {widgetCategories.map((category) => {
