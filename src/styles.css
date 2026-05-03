@@ -800,6 +800,11 @@ h1 {
   color: var(--error-text);
 }
 
+.message.notice {
+  background: rgba(43, 112, 88, 0.1);
+  color: var(--muted-strong);
+}
+
 .dashboard-grid {
   position: relative;
   min-height: 240px;

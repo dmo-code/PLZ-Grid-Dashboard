@@ -1,6 +1,16 @@
 # Ortblick
 
-Responsive React/TypeScript dashboard for German places and postal codes. Ortblick stores postal code, enabled widgets, widget order and widget sizes in `localStorage`, so it works without login or backend.
+Responsive React/TypeScript dashboard for German places and postal codes. Ortblick stores postal code, mode, enabled widgets, widget order, widget sizes and widget panel state in `localStorage`, so it works without login or backend.
+
+## Features
+
+- Search by German postal code or place name, with a side panel for ambiguous postal-code results.
+- Standard and hunting modes with separate widget layouts.
+- Configurable widgets with drag-and-drop ordering, sizes and collapsible settings sections.
+- Automatic refresh when the app becomes visible again and the current data is older than 15 minutes.
+- Focused weather, air, pollen, warnings, sun, moon, water level, wind and humidity data.
+- Enhanced wind widget with gusts, Beaufort rating, direction, daily maxima and short-term trend.
+- Installable PWA metadata via web app manifest.
 
 ## Free data sources
 

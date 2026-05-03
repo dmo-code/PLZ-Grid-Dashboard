@@ -138,7 +138,7 @@ function App() {
       setSettings((current) => ({ ...current, postalCode: dashboardData.location.postalCode }));
     } catch (caught) {
       if (!isBackgroundRefresh) {
-        setError(caught instanceof Error ? caught.message : "Die Daten konnten nicht geladen werden.");
+        setError(formatRefreshError(caught));
       }
     } finally {
       if (!isBackgroundRefresh) setLoading(false);
@@ -398,7 +398,7 @@ function App() {
         />
       )}
 
-      {error && <p className="message error">{error}</p>}
+      {error && <p className="message notice">{error}</p>}
       {loading && <p className="message">Daten werden geladen...</p>}
 
       <section className="dashboard-grid" aria-label="Dashboard Widgets" ref={dashboardRef} style={{ height: masonryHeight || undefined }}>
@@ -1449,6 +1449,19 @@ function getBeaufort(speedKmh: number) {
 function formatNumber(value: number | null | undefined, unit: string) {
   if (value === null || value === undefined) return "n/a";
   return `${Math.round(value)}${unit}`;
+}
+
+function formatRefreshError(caught: unknown) {
+  const message = caught instanceof Error ? caught.message : "";
+
+  if (message.includes("Wetterdaten")) {
+    return "Wetter konnte gerade nicht aktualisiert werden.";
+  }
+  if (message.includes("PLZ") || message.includes("Ort")) {
+    return message;
+  }
+
+  return "Ein Teil der Daten konnte gerade nicht geladen werden.";
 }
 
 function formatHour(value: string) {
