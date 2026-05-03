@@ -104,21 +104,25 @@ function App() {
     setMasonryHeight(0);
   }, []);
 
-  const refresh = useCallback(async (searchTerm: string, selectedPlace?: LocationChoice) => {
+  const refresh = useCallback(async (searchTerm: string, selectedPlace?: LocationChoice, options?: { background?: boolean }) => {
+    const isBackgroundRefresh = options?.background === true;
+
     if (!searchTerm) {
       setError("Bitte gib eine deutsche PLZ oder einen Ort ein.");
       return;
     }
 
-    setLoading(true);
-    setError(null);
+    if (!isBackgroundRefresh) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const isPostalCode = /^\d{5}$/.test(searchTerm);
       if (!selectedPlace && !isPostalCode) {
         const choices = await searchLocationChoices(searchTerm);
         if (choices.length > 1) {
           setLocationChoices(choices);
-          setLoading(false);
+          if (!isBackgroundRefresh) setLoading(false);
           return;
         }
         if (choices.length === 0) {
@@ -133,9 +137,11 @@ function App() {
       setLocationChoices([]);
       setSettings((current) => ({ ...current, postalCode: dashboardData.location.postalCode }));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Die Daten konnten nicht geladen werden.");
+      if (!isBackgroundRefresh) {
+        setError(caught instanceof Error ? caught.message : "Die Daten konnten nicht geladen werden.");
+      }
     } finally {
-      setLoading(false);
+      if (!isBackgroundRefresh) setLoading(false);
     }
   }, []);
 
@@ -148,7 +154,7 @@ function App() {
       if (document.visibilityState !== "visible") return;
       if (!data) return;
       if (Date.now() - new Date(data.updatedAt).getTime() < AUTO_REFRESH_MAX_AGE_MS) return;
-      void refresh(settings.postalCode);
+      void refresh(settings.postalCode, undefined, { background: true });
     };
 
     window.addEventListener("focus", refreshIfStale);
