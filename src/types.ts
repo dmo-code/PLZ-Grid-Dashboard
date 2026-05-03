@@ -17,6 +17,7 @@ export type WidgetId =
 
 export type WidgetSize = "mini" | "compact" | "wide" | "tall" | "large" | "full";
 export type ThemeMode = "system" | "standard" | "dark";
+export type ModeType = "standard" | "hunting";
 
 export type WidgetLayout = {
   id: WidgetId;
@@ -24,11 +25,17 @@ export type WidgetLayout = {
   size: WidgetSize;
 };
 
+export type ModeConfiguration = {
+  widgets: WidgetLayout[];
+  customHeight: Record<string, number>;
+};
+
 export type DashboardSettings = {
   postalCode: string;
   theme: ThemeMode;
-  widgets: WidgetLayout[];
-  huntMode: boolean;
+  currentMode: ModeType;
+  standardConfig: ModeConfiguration;
+  huntingConfig: ModeConfiguration;
 };
 
 export type LocationInfo = {

@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { loadDashboardData, searchLocationChoices, type LocationChoice } from "./api";
-import { loadSettings, saveSettings } from "./storage";
-import type { DashboardData, DashboardSettings, ThemeMode, WidgetId, WidgetLayout, WidgetSize } from "./types";
+import { loadSettings, loadWidgetPanelState, saveSettings, saveWidgetPanelState } from "./storage";
+import type { DashboardData, DashboardSettings, ThemeMode, WidgetId, WidgetLayout, WidgetSize, ModeType } from "./types";
 import "./styles.css";
 
 type DropPosition = "before" | "after";
@@ -86,26 +86,25 @@ function App() {
   const [systemPrefersDark, setSystemPrefersDark] = useState(() => {
     return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
-  const [huntMode, setHuntMode] = useState(settings.huntMode);
+
+  // Get current mode config
+  const currentConfig = settings[settings.currentMode === "hunting" ? "huntingConfig" : "standardConfig"];
+  const currentMode = settings.currentMode;
 
   useEffect(() => {
     saveSettings(settings);
   }, [settings]);
 
-  useEffect(() => {
-    if (huntMode !== settings.huntMode) {
-      if (huntMode) {
-        const huntWidgetIds = new Set(widgetCategories.find(c => c.id === "hunt")?.ids ?? []);
-        const newWidgets = settings.widgets.map(w => ({
-          ...w,
-          enabled: huntWidgetIds.has(w.id)
-        }));
-        setSettings(current => ({ ...current, widgets: newWidgets, huntMode: true }));
-      } else {
-        setSettings(current => ({ ...current, huntMode: false }));
-      }
-    }
-  }, [huntMode, settings, setSettings]);
+  // Mode switching function
+  const switchMode = useCallback((newMode: ModeType) => {
+    setSettings((current) => ({
+      ...current,
+      currentMode: newMode
+    }));
+    // Reset masonry layout when switching modes (widgets change)
+    setMasonryLayout({});
+    setMasonryHeight(0);
+  }, []);
 
   useEffect(() => {
     void refresh(settings.postalCode);
@@ -131,7 +130,7 @@ function App() {
     };
   }, []);
 
-  const enabledWidgets = useMemo(() => settings.widgets.filter((widget) => widget.enabled), [settings.widgets]);
+  const enabledWidgets = useMemo(() => currentConfig.widgets.filter((widget) => widget.enabled), [currentConfig.widgets]);
   const weatherTheme = getWeatherTheme(data);
   const activeTheme = settings.theme === "system" ? (systemPrefersDark ? "dark" : "standard") : settings.theme;
 
@@ -257,23 +256,40 @@ function App() {
   }
 
   function updateWidget(id: WidgetId, patch: Partial<WidgetLayout>) {
-    setSettings((current) => ({
-      ...current,
-      widgets: current.widgets.map((widget) => (widget.id === id ? { ...widget, ...patch } : widget))
-    }));
+    setSettings((current) => {
+      const isHunting = current.currentMode === "hunting";
+      const config = isHunting ? current.huntingConfig : current.standardConfig;
+      return {
+        ...current,
+        [isHunting ? "huntingConfig" : "standardConfig"]: {
+          ...config,
+          widgets: config.widgets.map((widget) =>
+            widget.id === id ? { ...widget, ...patch } : widget
+          )
+        }
+      };
+    });
   }
 
   function moveWidgetTo(id: WidgetId, targetId: WidgetId, position: DropPosition) {
     if (id === targetId) return;
     setSettings((current) => {
-      const widgets = [...current.widgets];
+      const isHunting = current.currentMode === "hunting";
+      const config = isHunting ? current.huntingConfig : current.standardConfig;
+      const widgets = [...config.widgets];
       const fromIndex = widgets.findIndex((widget) => widget.id === id);
       if (fromIndex < 0) return current;
       const [movedWidget] = widgets.splice(fromIndex, 1);
       const targetIndex = widgets.findIndex((widget) => widget.id === targetId);
       if (targetIndex < 0) return current;
       widgets.splice(position === "after" ? targetIndex + 1 : targetIndex, 0, movedWidget);
-      return { ...current, widgets };
+      return {
+        ...current,
+        [isHunting ? "huntingConfig" : "standardConfig"]: {
+          ...config,
+          widgets
+        }
+      };
     });
   }
 
@@ -287,7 +303,6 @@ function App() {
           <h1>PLZ Grid Dashboard</h1>
           <p className="weather-mood">
             {weatherTheme.label}
-            {settings.huntMode && <span className="hunt-mode-indicator">🦌 Jagd</span>}
           </p>
         </div>
         <div className="top-actions">
@@ -312,27 +327,6 @@ function App() {
               />
               <button type="submit">Aktualisieren</button>
             </div>
-            {locationChoices.length > 1 && (
-              <label className="location-choice-select">
-                <span>PLZ auswählen</span>
-                <select
-                  defaultValue=""
-                  onChange={(event) => {
-                    const choice = locationChoices.find((item) => item.postalCode === event.target.value);
-                    if (choice) void refresh(choice.postalCode, choice);
-                  }}
-                >
-                  <option value="" disabled>
-                    Mehrere PLZ gefunden
-                  </option>
-                  {locationChoices.map((choice) => (
-                    <option key={`${choice.postalCode}-${choice.name}`} value={choice.postalCode}>
-                      {choice.postalCode} - {[choice.name, choice.district?.name].filter(Boolean).join(", ")}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
           </form>
           <button className="settings-toggle" type="button" onClick={() => setSettingsOpen(true)}>
             Widgets
@@ -357,14 +351,23 @@ function App() {
 
       {settingsOpen && (
         <WidgetSettingsPanel
-          widgets={settings.widgets}
+          widgets={currentConfig.widgets}
           theme={settings.theme}
-          huntMode={huntMode}
-          onHuntModeChange={setHuntMode}
+          currentMode={currentMode}
+          onModeChange={switchMode}
           onClose={() => setSettingsOpen(false)}
           onMoveTo={moveWidgetTo}
           onUpdate={updateWidget}
           onThemeChange={(theme) => setSettings((current) => ({ ...current, theme }))}
+        />
+      )}
+
+      {locationChoices.length > 1 && (
+        <LocationChoicePanel
+          choices={locationChoices}
+          searchTerm={postalInput}
+          onClose={() => setLocationChoices([])}
+          onSelect={(choice) => void refresh(choice.postalCode, choice)}
         />
       )}
 
@@ -421,11 +424,80 @@ function App() {
   );
 }
 
+function LocationChoicePanel({
+  choices,
+  searchTerm,
+  onClose,
+  onSelect
+}: {
+  choices: LocationChoice[];
+  searchTerm: string;
+  onClose: () => void;
+  onSelect: (choice: LocationChoice) => void;
+}) {
+  return (
+    <div className="location-choice-overlay" role="presentation" onClick={onClose}>
+      <aside className="location-choice-drawer" aria-label="PLZ auswählen" onClick={(event) => event.stopPropagation()}>
+        <div className="settings-panel-header">
+          <div>
+            <p className="eyebrow">PLZ auswählen</p>
+            <h2>{choices.length} Treffer für {searchTerm}</h2>
+          </div>
+          <button type="button" onClick={onClose} aria-label="PLZ-Auswahl schließen">
+            ×
+          </button>
+        </div>
+        <div className="location-choice-list" role="listbox" aria-label="Gefundene Postleitzahlen">
+          {choices.map((choice) => {
+            const title = `${choice.postalCode} - ${choice.name}`;
+            const details = formatLocationChoiceDetails(choice);
+            return (
+              <button
+                key={`${choice.postalCode}-${choice.name}-${choice.district?.name ?? ""}`}
+                type="button"
+                className="location-choice-item"
+                role="option"
+                onClick={() => onSelect(choice)}
+              >
+                <span className="location-choice-copy">
+                  <strong>{title}</strong>
+                  {details && <small>{details}</small>}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function formatLocationChoiceDetails(choice: LocationChoice) {
+  const details = [choice.district?.name, choice.municipality?.name, choice.federalState?.name]
+    .filter((detail): detail is string => Boolean(detail))
+    .filter((detail, index, allDetails) => {
+      const normalizedDetail = normalizeDisplayValue(detail);
+      return (
+        normalizedDetail !== normalizeDisplayValue(choice.name) &&
+        allDetails.findIndex((item) => normalizeDisplayValue(item) === normalizedDetail) === index
+      );
+    });
+
+  return details.join(" · ");
+}
+
+function normalizeDisplayValue(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/,\s*stadt\b/g, "")
+    .trim();
+}
+
 function WidgetSettingsPanel({
   widgets,
   theme,
-  huntMode,
-  onHuntModeChange,
+  currentMode,
+  onModeChange,
   onClose,
   onMoveTo,
   onUpdate,
@@ -433,8 +505,8 @@ function WidgetSettingsPanel({
 }: {
   widgets: WidgetLayout[];
   theme: ThemeMode;
-  huntMode: boolean;
-  onHuntModeChange: (huntMode: boolean) => void;
+  currentMode: ModeType;
+  onModeChange: (mode: ModeType) => void;
   onClose: () => void;
   onMoveTo: (id: WidgetId, targetId: WidgetId, position: DropPosition) => void;
   onUpdate: (id: WidgetId, patch: Partial<WidgetLayout>) => void;
@@ -446,14 +518,18 @@ function WidgetSettingsPanel({
     position?: DropPosition;
   } | null>(null);
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(widgetCategories.map((category) => [category.id, false]))
+    loadWidgetPanelState(widgetCategories.map((category) => category.id))
   );
 
   const toggleCategory = (categoryId: string) => {
-    setCollapsedCategories((current) => ({
-      ...current,
-      [categoryId]: !current[categoryId]
-    }));
+    setCollapsedCategories((current) => {
+      const next = {
+        ...current,
+        [categoryId]: !current[categoryId]
+      };
+      saveWidgetPanelState(next);
+      return next;
+    });
   };
 
   return (
@@ -476,14 +552,23 @@ function WidgetSettingsPanel({
             <option value="dark">Dark</option>
           </select>
         </label>
-        <label className="hunt-mode-toggle">
-          <span>Jagd-Modus</span>
-          <input
-            type="checkbox"
-            checked={huntMode}
-            onChange={(event) => onHuntModeChange(event.target.checked)}
-          />
-        </label>
+        <div className="mode-selector-panel">
+          <span className="mode-selector-label">Modus</span>
+          <div className="mode-selector-buttons">
+            <button
+              className={`mode-selector-btn ${currentMode === "standard" ? "active" : ""}`}
+              onClick={() => onModeChange("standard")}
+            >
+              Standard
+            </button>
+            <button
+              className={`mode-selector-btn hunting ${currentMode === "hunting" ? "active" : ""}`}
+              onClick={() => onModeChange("hunting")}
+            >
+              🦌 Jagd
+            </button>
+          </div>
+        </div>
         <section className="config-panel">
           {widgetCategories.map((category) => {
             const categoryWidgets = widgets.filter((widget) => category.ids.includes(widget.id));

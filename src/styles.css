@@ -251,6 +251,7 @@ h1 {
 .search {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .search label,
@@ -304,7 +305,6 @@ h1 {
 }
 
 .theme-dark .search input,
-.theme-dark .location-choice-select select,
 .theme-dark .theme-select select,
 .theme-dark .config-card select {
   background: #101813;
@@ -317,27 +317,76 @@ h1 {
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
 }
 
-.location-choice-select {
+.location-choice-list {
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  max-height: calc(100vh - 130px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
 }
 
-.location-choice-select span {
+.location-choice-item {
+  display: block;
+  align-items: center;
+  min-height: 46px;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.location-choice-item:hover,
+.location-choice-item:focus-visible {
+  border-color: var(--border);
+  background: rgba(43, 112, 88, 0.1);
+}
+
+.location-choice-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.location-choice-copy strong,
+.location-choice-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.location-choice-copy strong {
+  font-weight: 900;
+}
+
+.location-choice-copy small {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 700;
-  text-transform: uppercase;
 }
 
-.location-choice-select select {
-  width: 100%;
-  min-height: 44px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0 12px;
-  background: var(--surface-solid);
-  color: var(--text);
-  font-weight: 800;
+.location-choice-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 21;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(17, 27, 22, 0.32);
+}
+
+.location-choice-drawer {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  width: min(480px, 100%);
+  min-height: 100%;
+  padding: 24px;
+  overflow-y: auto;
+  background: var(--surface-panel);
+  box-shadow: -24px 0 64px rgba(17, 27, 22, 0.22);
 }
 
 .status-strip {
@@ -596,6 +645,62 @@ h1 {
   height: 20px;
   cursor: pointer;
   accent-color: #8B4513;
+}
+
+/* Mode Selector in Settings Panel */
+.mode-selector-panel {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(139, 69, 19, 0.06);
+  margin-bottom: 12px;
+}
+
+.theme-dark .mode-selector-panel {
+  background: rgba(139, 69, 19, 0.12);
+}
+
+.mode-selector-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.mode-selector-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.mode-selector-btn {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 160ms ease;
+  font-size: 0.85rem;
+}
+
+.mode-selector-btn:hover:not(.active) {
+  background: rgba(22, 32, 27, 0.08);
+}
+
+.mode-selector-btn.active {
+  background: var(--button-bg);
+  color: var(--button-fg);
+  border-color: var(--button-bg);
+}
+
+.mode-selector-btn.hunting.active {
+  background: linear-gradient(135deg, #8b4513 0%, #a0522d 100%);
+  box-shadow: inset 0 0 12px rgba(255, 215, 0, 0.15);
+  border-color: #8b4513;
 }
 
 .hunt-mode-indicator {
@@ -1500,14 +1605,14 @@ footer {
   .dashboard-grid,
   .search,
   .settings-panel,
+  .location-choice-drawer,
   .widget {
     width: 100%;
     max-width: 100%;
     min-width: 0;
   }
 
-  .search-field,
-  .location-choice-select {
+  .search-field {
     width: 100%;
     min-width: 0;
   }
@@ -1581,7 +1686,8 @@ footer {
     min-width: auto;
   }
 
-  .settings-panel {
+  .settings-panel,
+  .location-choice-drawer {
     width: 100%;
     padding: 16px 12px;
     box-shadow: -16px 0 48px rgba(17, 27, 22, 0.16);
