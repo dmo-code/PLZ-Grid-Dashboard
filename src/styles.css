@@ -1057,7 +1057,8 @@ h1 {
 
 .widget h2 {
   margin: 0;
-  font-size: 1.08rem;
+  font-size: 1.75rem;
+  line-height: 1.2;
 }
 
 .widget-body {
@@ -1902,7 +1903,7 @@ footer {
   }
 
   .widget h2 {
-    font-size: 1rem;
+    font-size: 1.75rem;
   }
 
   .widget-heading {
@@ -1979,7 +1980,7 @@ footer {
   }
 
   .widget h2 {
-    font-size: 0.95rem;
+    font-size: 1.75rem;
   }
 
   .hero-metric strong {
