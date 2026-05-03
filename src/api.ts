@@ -50,6 +50,16 @@ type OpenPlzLocality = {
 
 export type LocationChoice = OpenPlzLocality;
 
+type OpenMeteoGeocodingResponse = {
+  results?: Array<{
+    name?: string;
+    latitude?: number;
+    longitude?: number;
+    admin1?: string;
+    country_code?: string;
+  }>;
+};
+
 type DwdPollenPayload = {
   last_update?: string;
   content?: Array<{
@@ -219,13 +229,51 @@ async function getLocation(postalCode: string, locality?: OpenPlzLocality | null
   if (!place) {
     throw new Error("Zu dieser PLZ wurden keine Ortsdaten geliefert.");
   }
+  const placeName = locality?.name ?? place["place name"];
+  const state = locality?.federalState?.name ?? place.state;
+  const coordinates = await resolveCoordinates(Number(place.latitude), Number(place.longitude), placeName, state);
 
   return {
     postalCode: data["post code"],
-    place: locality?.name ?? place["place name"],
-    state: locality?.federalState?.name ?? place.state,
-    latitude: Number(place.latitude),
-    longitude: Number(place.longitude)
+    place: placeName,
+    state,
+    latitude: coordinates.latitude,
+    longitude: coordinates.longitude
+  };
+}
+
+async function resolveCoordinates(latitude: number, longitude: number, placeName: string, state: string) {
+  if (isValidCoordinates(latitude, longitude)) return { latitude, longitude };
+
+  const geocoded = await getGeocodedCoordinates(placeName, state);
+  if (geocoded) return geocoded;
+
+  throw new Error("Koordinaten für diesen Ort konnten nicht geladen werden.");
+}
+
+function isValidCoordinates(latitude: number, longitude: number) {
+  return Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180;
+}
+
+async function getGeocodedCoordinates(placeName: string, state: string) {
+  const params = new URLSearchParams({
+    name: placeName,
+    count: "5",
+    language: "de",
+    format: "json",
+    countryCode: "DE"
+  });
+  const response = await fetch(`https://geocoding-api.open-meteo.com/v1/search?${params.toString()}`);
+  if (!response.ok) return null;
+
+  const data = (await response.json()) as OpenMeteoGeocodingResponse;
+  const results = data.results ?? [];
+  const match = results.find((result) => result.admin1 === state) ?? results[0];
+  if (!match || !isValidCoordinates(Number(match.latitude), Number(match.longitude))) return null;
+
+  return {
+    latitude: Number(match.latitude),
+    longitude: Number(match.longitude)
   };
 }
 
