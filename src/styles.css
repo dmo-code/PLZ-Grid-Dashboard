@@ -1220,6 +1220,10 @@ h1 {
   font-weight: 800;
 }
 
+.roof-rain-widget .metric > span {
+  text-transform: none;
+}
+
 .metric-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1239,6 +1243,63 @@ h1 {
 .metric strong {
   font-size: 1.2rem;
   overflow-wrap: anywhere;
+}
+
+.metric span {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.info-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.info-tooltip button {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--surface-solid);
+  color: var(--muted-strong);
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.info-tooltip span[role="tooltip"] {
+  position: absolute;
+  right: -8px;
+  bottom: calc(100% + 9px);
+  z-index: 8;
+  width: min(260px, 72vw);
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-solid);
+  color: var(--text);
+  box-shadow: 0 14px 32px var(--shadow);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-transform: none;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease;
+}
+
+.info-tooltip:hover span[role="tooltip"],
+.info-tooltip:focus-within span[role="tooltip"] {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .detail-list {

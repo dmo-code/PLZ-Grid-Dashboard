@@ -1195,10 +1195,20 @@ function WaterWidget({ data }: { data: DashboardData }) {
 
 function RoofRainWidget({ data }: { data: DashboardData }) {
   const [settings, setSettings] = useState<RoofRainSettings>(() => loadRoofRainSettings());
+  const [areaInput, setAreaInput] = useState(() => String(loadRoofRainSettings().area));
   const rainNext24h = getNext24hPrecipitation(data.weather.current.time, data.weather.hourly.time, data.weather.hourly.precipitation);
-  const projectedArea = settings.areaMode === "roof" ? settings.area * Math.cos((settings.roofPitch * Math.PI) / 180) : settings.area;
+  const activeArea = areaInput.trim() === "" ? 0 : settings.area;
+  const projectedArea = settings.areaMode === "roof" ? activeArea * Math.cos((settings.roofPitch * Math.PI) / 180) : activeArea;
   const collectedLiters = rainNext24h === null ? null : rainNext24h * projectedArea * settings.runoffFactor;
   const areaModeLabel = settings.areaMode === "roof" ? `Schrägdach ${settings.roofPitch}°` : "Grundfläche";
+
+  const updateAreaInput = (value: string) => {
+    setAreaInput(value);
+    if (value.trim() === "") return;
+
+    const area = Number(value);
+    if (Number.isFinite(area)) updateRoofRainSettings({ area });
+  };
 
   const updateRoofRainSettings = (patch: Partial<RoofRainSettings>) => {
     setSettings((current) => {
@@ -1216,7 +1226,15 @@ function RoofRainWidget({ data }: { data: DashboardData }) {
       </div>
       <div className="metric-row">
         <Metric label="Regen" value={rainNext24h === null ? "n/a" : `${formatDecimal(rainNext24h, 1)} mm`} />
-        <Metric label="Auffangfläche" value={`${formatDecimal(projectedArea, 0)} m²`} />
+        <Metric
+          label={
+            <>
+              Auffangfläche
+              <InfoTooltip text="Regen wird auf die horizontale Grundfläche gemessen. Bei Schrägdächern rechnet das Widget die angegebene Dachfläche über cos(Dachneigung) auf diese Auffangfläche um." />
+            </>
+          }
+          value={`${formatDecimal(projectedArea, 0)} m²`}
+        />
         <Metric label="Abfluss" value={`${Math.round(settings.runoffFactor * 100)}%`} />
       </div>
       <div className="roof-rain-controls" onPointerDown={(event) => event.stopPropagation()} onDragStart={(event) => event.preventDefault()}>
@@ -1243,8 +1261,8 @@ function RoofRainWidget({ data }: { data: DashboardData }) {
             min="1"
             max="2000"
             step="1"
-            value={settings.area}
-            onChange={(event) => updateRoofRainSettings({ area: Number(event.target.value) })}
+            value={areaInput}
+            onChange={(event) => updateAreaInput(event.target.value)}
           />
           <small>m²</small>
         </label>
@@ -1277,12 +1295,23 @@ function RoofRainWidget({ data }: { data: DashboardData }) {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value }: { label: React.ReactNode; value: string }) {
   return (
     <div className="metric">
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
+  );
+}
+
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <span className="info-tooltip">
+      <button type="button" aria-label={text}>
+        i
+      </button>
+      <span role="tooltip">{text}</span>
+    </span>
   );
 }
 
