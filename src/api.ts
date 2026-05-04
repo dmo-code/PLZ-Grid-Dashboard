@@ -329,6 +329,7 @@ async function getWeather(location: LocationInfo): Promise<WeatherData> {
     ].join(","),
     hourly: [
       "temperature_2m",
+      "precipitation",
       "precipitation_probability",
       "weather_code",
       "wind_speed_10m",
@@ -369,6 +370,7 @@ async function getWeather(location: LocationInfo): Promise<WeatherData> {
     hourly: {
       time: data.hourly?.time ?? [],
       temperature: data.hourly?.temperature_2m ?? [],
+      precipitation: data.hourly?.precipitation ?? [],
       precipitationProbability: data.hourly?.precipitation_probability ?? [],
       weatherCode: data.hourly?.weather_code ?? [],
       windSpeed: data.hourly?.wind_speed_10m ?? [],

@@ -9,6 +9,7 @@ export type WidgetId =
   | "dwdPollen"
   | "ubaAir"
   | "water"
+  | "roofRain"
   | "moon"
   | "wind"
   | "humidity";
@@ -70,6 +71,7 @@ export type WeatherData = {
   hourly: {
     time: string[];
     temperature: Array<number | null>;
+    precipitation: Array<number | null>;
     precipitationProbability: Array<number | null>;
     weatherCode: Array<number | null>;
     windSpeed: Array<number | null>;

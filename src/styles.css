@@ -1153,6 +1153,73 @@ h1 {
   line-height: 1.35;
 }
 
+.roof-rain-widget {
+  display: grid;
+  gap: 16px;
+}
+
+.roof-rain-hero strong {
+  font-size: clamp(2.7rem, 8vw, 4.8rem);
+}
+
+.roof-rain-controls {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(50, 126, 170, 0.07);
+}
+
+.segmented-control {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.segmented-control button {
+  min-height: 36px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.segmented-control button.active {
+  background: var(--button-bg);
+  color: var(--button-fg);
+}
+
+.roof-rain-field {
+  display: grid;
+  grid-template-columns: minmax(72px, 0.8fr) minmax(0, 1.2fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.roof-rain-field span,
+.roof-rain-field small {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.roof-rain-field input,
+.roof-rain-field select {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 10px;
+  background: var(--surface-solid);
+  color: var(--text);
+  font-weight: 800;
+}
+
 .metric-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

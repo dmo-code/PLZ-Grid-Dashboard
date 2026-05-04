@@ -1,7 +1,17 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { loadDashboardData, searchLocationChoices, type LocationChoice } from "./api";
-import { loadSettings, loadWidgetPanelState, markHelpSeen, saveSettings, saveWidgetPanelState, shouldOpenHelpOnStart } from "./storage";
+import {
+  loadRoofRainSettings,
+  loadSettings,
+  loadWidgetPanelState,
+  markHelpSeen,
+  saveRoofRainSettings,
+  saveSettings,
+  saveWidgetPanelState,
+  shouldOpenHelpOnStart,
+  type RoofRainSettings
+} from "./storage";
 import type { DashboardData, DashboardSettings, ThemeMode, WidgetId, WidgetLayout, WidgetSize, ModeType } from "./types";
 import "./styles.css";
 
@@ -28,6 +38,7 @@ const widgetMeta: Record<WidgetId, { title: string; accent: string }> = {
   sun: { title: "Sonne", accent: "rose" },
   moon: { title: "Mond", accent: "moon" },
   water: { title: "Pegel", accent: "water" },
+  roofRain: { title: "Dachregen", accent: "water" },
   wind: { title: "Wind", accent: "sky" },
   humidity: { title: "Luftfeuchte", accent: "water" }
 };
@@ -59,7 +70,7 @@ const widgetCategories = [
   { id: "weather", title: "Wetter", ids: ["weather", "dwdWeather", "warnings"] as WidgetId[] },
   { id: "air", title: "Luft & Umwelt", ids: ["pollen", "dwdPollen", "air", "ubaAir", "humidity"] as WidgetId[] },
   { id: "sunMoon", title: "Sonne & Mond", ids: ["sun", "moon"] as WidgetId[] },
-  { id: "waterEnergy", title: "Wasser", ids: ["water"] as WidgetId[] },
+  { id: "waterEnergy", title: "Wasser", ids: ["water", "roofRain"] as WidgetId[] },
   { id: "hunt", title: "Jagd", ids: ["moon", "weather", "sun", "warnings", "air", "pollen", "wind", "humidity"] as WidgetId[] }
 ];
 
@@ -855,6 +866,8 @@ function renderWidget(id: WidgetId, data: DashboardData) {
       return <MoonWidget data={data} />;
     case "water":
       return <WaterWidget data={data} />;
+    case "roofRain":
+      return <RoofRainWidget data={data} />;
     case "wind":
       return <WindWidget data={data} />;
     case "humidity": {
@@ -1180,6 +1193,90 @@ function WaterWidget({ data }: { data: DashboardData }) {
   );
 }
 
+function RoofRainWidget({ data }: { data: DashboardData }) {
+  const [settings, setSettings] = useState<RoofRainSettings>(() => loadRoofRainSettings());
+  const rainNext24h = getNext24hPrecipitation(data.weather.current.time, data.weather.hourly.time, data.weather.hourly.precipitation);
+  const projectedArea = settings.areaMode === "roof" ? settings.area * Math.cos((settings.roofPitch * Math.PI) / 180) : settings.area;
+  const collectedLiters = rainNext24h === null ? null : rainNext24h * projectedArea * settings.runoffFactor;
+  const areaModeLabel = settings.areaMode === "roof" ? `Schrägdach ${settings.roofPitch}°` : "Grundfläche";
+
+  const updateRoofRainSettings = (patch: Partial<RoofRainSettings>) => {
+    setSettings((current) => {
+      const next = { ...current, ...patch };
+      saveRoofRainSettings(next);
+      return next;
+    });
+  };
+
+  return (
+    <div className="roof-rain-widget">
+      <div className="hero-metric roof-rain-hero">
+        <strong>{collectedLiters === null ? "n/a" : `${formatCompactLiters(collectedLiters)} L`}</strong>
+        <span>in den nächsten 24 Stunden</span>
+      </div>
+      <div className="metric-row">
+        <Metric label="Regen" value={rainNext24h === null ? "n/a" : `${formatDecimal(rainNext24h, 1)} mm`} />
+        <Metric label="Auffangfläche" value={`${formatDecimal(projectedArea, 0)} m²`} />
+        <Metric label="Abfluss" value={`${Math.round(settings.runoffFactor * 100)}%`} />
+      </div>
+      <div className="roof-rain-controls" onPointerDown={(event) => event.stopPropagation()} onDragStart={(event) => event.preventDefault()}>
+        <div className="segmented-control" aria-label="Dachflächen-Modus">
+          <button
+            type="button"
+            className={settings.areaMode === "ground" ? "active" : ""}
+            onClick={() => updateRoofRainSettings({ areaMode: "ground" })}
+          >
+            Grundfläche
+          </button>
+          <button
+            type="button"
+            className={settings.areaMode === "roof" ? "active" : ""}
+            onClick={() => updateRoofRainSettings({ areaMode: "roof" })}
+          >
+            Schräge Dachfläche
+          </button>
+        </div>
+        <label className="roof-rain-field">
+          <span>Fläche</span>
+          <input
+            type="number"
+            min="1"
+            max="2000"
+            step="1"
+            value={settings.area}
+            onChange={(event) => updateRoofRainSettings({ area: Number(event.target.value) })}
+          />
+          <small>m²</small>
+        </label>
+        {settings.areaMode === "roof" ? (
+          <label className="roof-rain-field">
+            <span>Neigung</span>
+            <select value={settings.roofPitch} onChange={(event) => updateRoofRainSettings({ roofPitch: Number(event.target.value) })}>
+              {[10, 20, 30, 35, 45, 55].map((pitch) => (
+                <option key={pitch} value={pitch}>
+                  {pitch}°
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <label className="roof-rain-field">
+          <span>Abfluss</span>
+          <select value={settings.runoffFactor} onChange={(event) => updateRoofRainSettings({ runoffFactor: Number(event.target.value) })}>
+            <option value={0.9}>realistisch 90%</option>
+            <option value={0.95}>optimal 95%</option>
+            <option value={1}>roh 100%</option>
+          </select>
+        </label>
+      </div>
+      <div className="source-line">
+        <strong>{areaModeLabel}</strong>
+        <span>Open-Meteo · 24h Summe</span>
+      </div>
+    </div>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="metric">
@@ -1478,6 +1575,14 @@ function maxToday(times: string[], values: Array<number | null>) {
   return todaysValues.length ? Math.max(...todaysValues) : null;
 }
 
+function getNext24hPrecipitation(currentTime: string, times: string[], values: Array<number | null>) {
+  const currentIndex = times.findIndex((time) => time >= currentTime);
+  const startIndex = currentIndex >= 0 ? currentIndex : 0;
+  const nextValues = values.slice(startIndex, startIndex + 24).filter((value): value is number => value !== null);
+  if (nextValues.length === 0) return null;
+  return nextValues.reduce((sum, value) => sum + value, 0);
+}
+
 function getNextHourlyValue(currentTime: string, times: string[], values: Array<number | null>) {
   const currentIndex = times.findIndex((time) => time >= currentTime);
   const startIndex = currentIndex >= 0 ? currentIndex : 0;
@@ -1541,6 +1646,17 @@ function getBeaufort(speedKmh: number) {
 function formatNumber(value: number | null | undefined, unit: string) {
   if (value === null || value === undefined) return "n/a";
   return `${Math.round(value)}${unit}`;
+}
+
+function formatDecimal(value: number, digits: number) {
+  return new Intl.NumberFormat("de-DE", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits
+  }).format(value);
+}
+
+function formatCompactLiters(value: number) {
+  return new Intl.NumberFormat("de-DE", { maximumFractionDigits: 0 }).format(Math.round(value));
 }
 
 function formatRefreshError(caught: unknown) {

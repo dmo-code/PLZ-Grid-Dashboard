@@ -3,6 +3,7 @@ import type { DashboardSettings, ThemeMode, WidgetId, WidgetLayout, ModeConfigur
 const STORAGE_KEY = "plz-grid-dashboard:v2";
 const WIDGET_PANEL_STATE_KEY = "plz-grid-dashboard:widget-panel:v1";
 const HELP_SEEN_KEY = "plz-grid-dashboard:help-seen:v1";
+const ROOF_RAIN_SETTINGS_KEY = "plz-grid-dashboard:roof-rain:v1";
 
 // Standard Mode: Weather, place, and environment data
 export const DEFAULT_STANDARD_CONFIG: ModeConfiguration = {
@@ -18,6 +19,7 @@ export const DEFAULT_STANDARD_CONFIG: ModeConfiguration = {
     { id: "sun", enabled: true, size: "mini" },
     { id: "moon", enabled: true, size: "mini" },
     { id: "water", enabled: true, size: "mini" },
+    { id: "roofRain", enabled: true, size: "compact" },
     { id: "wind", enabled: false, size: "compact" },
     { id: "humidity", enabled: false, size: "compact" }
   ],
@@ -146,6 +148,35 @@ export function markHelpSeen() {
   }
 }
 
+export type RoofRainSettings = {
+  areaMode: "ground" | "roof";
+  area: number;
+  roofPitch: number;
+  runoffFactor: number;
+};
+
+export const DEFAULT_ROOF_RAIN_SETTINGS: RoofRainSettings = {
+  areaMode: "roof",
+  area: 120,
+  roofPitch: 35,
+  runoffFactor: 0.9
+};
+
+export function loadRoofRainSettings(): RoofRainSettings {
+  try {
+    const raw = window.localStorage.getItem(ROOF_RAIN_SETTINGS_KEY);
+    if (!raw) return DEFAULT_ROOF_RAIN_SETTINGS;
+    const parsed = JSON.parse(raw) as Partial<RoofRainSettings>;
+    return normalizeRoofRainSettings(parsed);
+  } catch {
+    return DEFAULT_ROOF_RAIN_SETTINGS;
+  }
+}
+
+export function saveRoofRainSettings(settings: RoofRainSettings) {
+  window.localStorage.setItem(ROOF_RAIN_SETTINGS_KEY, JSON.stringify(normalizeRoofRainSettings(settings)));
+}
+
 function normalizeConfig(config: ModeConfiguration | undefined, defaults: ModeConfiguration): ModeConfiguration {
   if (!config || !Array.isArray(config.widgets)) return defaults;
 
@@ -193,4 +224,24 @@ function normalizeHuntingConfig(config: ModeConfiguration | undefined): ModeConf
     widgets,
     customHeight: config.customHeight || {}
   };
+}
+
+function normalizeRoofRainSettings(settings: Partial<RoofRainSettings>): RoofRainSettings {
+  const areaMode = settings.areaMode === "ground" || settings.areaMode === "roof" ? settings.areaMode : DEFAULT_ROOF_RAIN_SETTINGS.areaMode;
+  const area = clampFinite(settings.area, 1, 2000, DEFAULT_ROOF_RAIN_SETTINGS.area);
+  const roofPitch = clampFinite(settings.roofPitch, 0, 75, DEFAULT_ROOF_RAIN_SETTINGS.roofPitch);
+  const runoffFactor = [0.9, 0.95, 1].includes(settings.runoffFactor ?? 0)
+    ? (settings.runoffFactor as number)
+    : DEFAULT_ROOF_RAIN_SETTINGS.runoffFactor;
+
+  return {
+    areaMode,
+    area,
+    roofPitch,
+    runoffFactor
+  };
+}
+
+function clampFinite(value: unknown, min: number, max: number, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
 }
