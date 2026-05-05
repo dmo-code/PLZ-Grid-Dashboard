@@ -1194,6 +1194,10 @@ h1 {
   color: var(--button-fg);
 }
 
+.timeframe-control {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .roof-rain-field {
   display: grid;
   grid-template-columns: minmax(72px, 0.8fr) minmax(0, 1.2fr) auto;

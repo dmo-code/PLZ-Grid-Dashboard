@@ -1195,11 +1195,16 @@ function WaterWidget({ data }: { data: DashboardData }) {
 
 function RoofRainWidget({ data }: { data: DashboardData }) {
   const [settings, setSettings] = useState<RoofRainSettings>(() => loadRoofRainSettings());
-  const [areaInput, setAreaInput] = useState(() => String(loadRoofRainSettings().area));
-  const rainNext24h = getNext24hPrecipitation(data.weather.current.time, data.weather.hourly.time, data.weather.hourly.precipitation);
+  const [areaInput, setAreaInput] = useState(() => String(settings.area));
+  const rainForTimeframe = getNextPrecipitation(
+    data.weather.current.time,
+    data.weather.hourly.time,
+    data.weather.hourly.precipitation,
+    settings.timeframeHours
+  );
   const activeArea = areaInput.trim() === "" ? 0 : settings.area;
   const projectedArea = settings.areaMode === "roof" ? activeArea * Math.cos((settings.roofPitch * Math.PI) / 180) : activeArea;
-  const collectedLiters = rainNext24h === null ? null : rainNext24h * projectedArea * settings.runoffFactor;
+  const collectedLiters = rainForTimeframe === null ? null : rainForTimeframe * projectedArea * settings.runoffFactor;
   const areaModeLabel = settings.areaMode === "roof" ? `Schrägdach ${settings.roofPitch}°` : "Grundfläche";
 
   const updateAreaInput = (value: string) => {
@@ -1222,10 +1227,10 @@ function RoofRainWidget({ data }: { data: DashboardData }) {
     <div className="roof-rain-widget">
       <div className="hero-metric roof-rain-hero">
         <strong>{collectedLiters === null ? "n/a" : `${formatCompactLiters(collectedLiters)} L`}</strong>
-        <span>in den nächsten 24 Stunden</span>
+        <span>in den nächsten {settings.timeframeHours} Stunden</span>
       </div>
       <div className="metric-row">
-        <Metric label="Regen" value={rainNext24h === null ? "n/a" : `${formatDecimal(rainNext24h, 1)} mm`} />
+        <Metric label="Regen" value={rainForTimeframe === null ? "n/a" : `${formatDecimal(rainForTimeframe, 1)} mm`} />
         <Metric
           label={
             <>
@@ -1238,6 +1243,18 @@ function RoofRainWidget({ data }: { data: DashboardData }) {
         <Metric label="Abfluss" value={`${Math.round(settings.runoffFactor * 100)}%`} />
       </div>
       <div className="roof-rain-controls" onPointerDown={(event) => event.stopPropagation()} onDragStart={(event) => event.preventDefault()}>
+        <div className="segmented-control timeframe-control" aria-label="Zeitraum">
+          {[24, 48, 72].map((hours) => (
+            <button
+              key={hours}
+              type="button"
+              className={settings.timeframeHours === hours ? "active" : ""}
+              onClick={() => updateRoofRainSettings({ timeframeHours: hours as 24 | 48 | 72 })}
+            >
+              {hours}h
+            </button>
+          ))}
+        </div>
         <div className="segmented-control" aria-label="Dachflächen-Modus">
           <button
             type="button"
@@ -1289,7 +1306,7 @@ function RoofRainWidget({ data }: { data: DashboardData }) {
       </div>
       <div className="source-line">
         <strong>{areaModeLabel}</strong>
-        <span>Open-Meteo · 24h Summe</span>
+        <span>Open-Meteo · {settings.timeframeHours}h Summe</span>
       </div>
     </div>
   );
@@ -1604,10 +1621,10 @@ function maxToday(times: string[], values: Array<number | null>) {
   return todaysValues.length ? Math.max(...todaysValues) : null;
 }
 
-function getNext24hPrecipitation(currentTime: string, times: string[], values: Array<number | null>) {
+function getNextPrecipitation(currentTime: string, times: string[], values: Array<number | null>, hours: number) {
   const currentIndex = times.findIndex((time) => time >= currentTime);
   const startIndex = currentIndex >= 0 ? currentIndex : 0;
-  const nextValues = values.slice(startIndex, startIndex + 24).filter((value): value is number => value !== null);
+  const nextValues = values.slice(startIndex, startIndex + hours).filter((value): value is number => value !== null);
   if (nextValues.length === 0) return null;
   return nextValues.reduce((sum, value) => sum + value, 0);
 }

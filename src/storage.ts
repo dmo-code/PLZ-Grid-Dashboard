@@ -153,13 +153,15 @@ export type RoofRainSettings = {
   area: number;
   roofPitch: number;
   runoffFactor: number;
+  timeframeHours: 24 | 48 | 72;
 };
 
 export const DEFAULT_ROOF_RAIN_SETTINGS: RoofRainSettings = {
   areaMode: "roof",
   area: 120,
   roofPitch: 35,
-  runoffFactor: 0.9
+  runoffFactor: 0.9,
+  timeframeHours: 24
 };
 
 export function loadRoofRainSettings(): RoofRainSettings {
@@ -233,12 +235,16 @@ function normalizeRoofRainSettings(settings: Partial<RoofRainSettings>): RoofRai
   const runoffFactor = [0.9, 0.95, 1].includes(settings.runoffFactor ?? 0)
     ? (settings.runoffFactor as number)
     : DEFAULT_ROOF_RAIN_SETTINGS.runoffFactor;
+  const timeframeHours = [24, 48, 72].includes(settings.timeframeHours ?? 0)
+    ? (settings.timeframeHours as 24 | 48 | 72)
+    : DEFAULT_ROOF_RAIN_SETTINGS.timeframeHours;
 
   return {
     areaMode,
     area,
     roofPitch,
-    runoffFactor
+    runoffFactor,
+    timeframeHours
   };
 }
 
