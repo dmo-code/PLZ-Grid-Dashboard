@@ -1195,24 +1195,23 @@ function WaterWidget({ data }: { data: DashboardData }) {
 
 function RoofRainWidget({ data }: { data: DashboardData }) {
   const [settings, setSettings] = useState<RoofRainSettings>(() => loadRoofRainSettings());
-  const [areaInput, setAreaInput] = useState(() => String(settings.area));
   const rainForTimeframe = getNextPrecipitation(
     data.weather.current.time,
     data.weather.hourly.time,
     data.weather.hourly.precipitation,
     settings.timeframeHours
   );
-  const activeArea = areaInput.trim() === "" ? 0 : settings.area;
+  const activeArea = settings.areaInput.trim() === "" ? 0 : settings.area;
   const projectedArea = settings.areaMode === "roof" ? activeArea * Math.cos((settings.roofPitch * Math.PI) / 180) : activeArea;
   const collectedLiters = rainForTimeframe === null ? null : rainForTimeframe * projectedArea * settings.runoffFactor;
   const areaModeLabel = settings.areaMode === "roof" ? `Schrägdach ${settings.roofPitch}°` : "Grundfläche";
 
   const updateAreaInput = (value: string) => {
-    setAreaInput(value);
-    if (value.trim() === "") return;
-
-    const area = Number(value);
-    if (Number.isFinite(area)) updateRoofRainSettings({ area });
+    const area = value.trim() === "" ? 0 : Number(value);
+    updateRoofRainSettings({
+      areaInput: value,
+      ...(Number.isFinite(area) ? { area } : {})
+    });
   };
 
   const updateRoofRainSettings = (patch: Partial<RoofRainSettings>) => {
@@ -1275,10 +1274,10 @@ function RoofRainWidget({ data }: { data: DashboardData }) {
           <span>Fläche</span>
           <input
             type="number"
-            min="1"
+            min="0"
             max="2000"
             step="1"
-            value={areaInput}
+            value={settings.areaInput}
             onChange={(event) => updateAreaInput(event.target.value)}
           />
           <small>m²</small>

@@ -151,6 +151,7 @@ export function markHelpSeen() {
 export type RoofRainSettings = {
   areaMode: "ground" | "roof";
   area: number;
+  areaInput: string;
   roofPitch: number;
   runoffFactor: number;
   timeframeHours: 24 | 48 | 72;
@@ -159,6 +160,7 @@ export type RoofRainSettings = {
 export const DEFAULT_ROOF_RAIN_SETTINGS: RoofRainSettings = {
   areaMode: "roof",
   area: 120,
+  areaInput: "120",
   roofPitch: 35,
   runoffFactor: 0.9,
   timeframeHours: 24
@@ -230,7 +232,9 @@ function normalizeHuntingConfig(config: ModeConfiguration | undefined): ModeConf
 
 function normalizeRoofRainSettings(settings: Partial<RoofRainSettings>): RoofRainSettings {
   const areaMode = settings.areaMode === "ground" || settings.areaMode === "roof" ? settings.areaMode : DEFAULT_ROOF_RAIN_SETTINGS.areaMode;
-  const area = clampFinite(settings.area, 1, 2000, DEFAULT_ROOF_RAIN_SETTINGS.area);
+  const areaInput = typeof settings.areaInput === "string" ? settings.areaInput : String(settings.area ?? DEFAULT_ROOF_RAIN_SETTINGS.area);
+  const areaFromInput = areaInput.trim() === "" ? 0 : Number(areaInput);
+  const area = clampFinite(Number.isFinite(areaFromInput) ? areaFromInput : settings.area, 0, 2000, DEFAULT_ROOF_RAIN_SETTINGS.area);
   const roofPitch = clampFinite(settings.roofPitch, 0, 75, DEFAULT_ROOF_RAIN_SETTINGS.roofPitch);
   const runoffFactor = [0.9, 0.95, 1].includes(settings.runoffFactor ?? 0)
     ? (settings.runoffFactor as number)
@@ -242,6 +246,7 @@ function normalizeRoofRainSettings(settings: Partial<RoofRainSettings>): RoofRai
   return {
     areaMode,
     area,
+    areaInput,
     roofPitch,
     runoffFactor,
     timeframeHours
