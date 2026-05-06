@@ -23,7 +23,8 @@ export const DEFAULT_STANDARD_CONFIG: ModeConfiguration = {
     { id: "wind", enabled: false, size: "compact" },
     { id: "humidity", enabled: false, size: "compact" }
   ],
-  customHeight: {}
+  customHeight: {},
+  gridLayout: {}
 };
 
 // Hunting Mode: focused weather and nature signals
@@ -38,7 +39,8 @@ export const DEFAULT_HUNTING_CONFIG: ModeConfiguration = {
     { id: "wind", enabled: false, size: "compact" },
     { id: "humidity", enabled: false, size: "compact" }
   ],
-  customHeight: {}
+  customHeight: {},
+  gridLayout: {}
 };
 
 const widgetIds = new Set<WidgetId>(
@@ -196,7 +198,8 @@ function normalizeConfig(config: ModeConfiguration | undefined, defaults: ModeCo
 
   return {
     widgets,
-    customHeight: config.customHeight || {}
+    customHeight: config.customHeight || {},
+    gridLayout: normalizeGridLayout(config.gridLayout)
   };
 }
 
@@ -226,8 +229,21 @@ function normalizeHuntingConfig(config: ModeConfiguration | undefined): ModeConf
 
   return {
     widgets,
-    customHeight: config.customHeight || {}
+    customHeight: config.customHeight || {},
+    gridLayout: normalizeGridLayout(config.gridLayout)
   };
+}
+
+function normalizeGridLayout(config: ModeConfiguration["gridLayout"]) {
+  if (!config || typeof config !== "object") return {};
+
+  const layout: ModeConfiguration["gridLayout"] = {};
+  for (const [id, item] of Object.entries(config)) {
+    if (!widgetIds.has(id as WidgetId) || !item) continue;
+    if (!Number.isFinite(item.x) || !Number.isFinite(item.y) || !Number.isFinite(item.w) || !Number.isFinite(item.h)) continue;
+    layout[id as WidgetId] = item;
+  }
+  return layout;
 }
 
 function normalizeRoofRainSettings(settings: Partial<RoofRainSettings>): RoofRainSettings {

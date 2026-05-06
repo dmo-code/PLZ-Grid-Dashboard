@@ -24,9 +24,17 @@ export type WidgetLayout = {
   size: WidgetSize;
 };
 
+export type GridWidgetLayout = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
 export type ModeConfiguration = {
   widgets: WidgetLayout[];
   customHeight: Record<string, number>;
+  gridLayout?: Partial<Record<WidgetId, GridWidgetLayout>>;
 };
 
 export type DashboardSettings = {

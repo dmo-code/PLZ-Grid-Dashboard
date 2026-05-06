@@ -620,7 +620,7 @@ h1 {
 .config-card {
   display: grid;
   position: relative;
-  grid-template-columns: minmax(118px, 1fr) 112px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   align-items: center;
   min-height: 58px;
@@ -701,6 +701,7 @@ h1 {
 }
 
 .config-card select {
+  display: none;
   min-width: 0;
   height: 36px;
   border: 1px solid var(--border-strong);
@@ -923,10 +924,37 @@ h1 {
   min-height: 240px;
 }
 
+.react-grid-dashboard {
+  width: 100%;
+}
+
+.react-grid-item {
+  min-width: 0;
+}
+
+.react-grid-item > .widget {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.react-grid-item.react-grid-placeholder {
+  border-radius: 8px;
+  background: rgba(50, 126, 170, 0.18);
+}
+
+.react-grid-item.resizing > .widget,
+.react-grid-item.react-draggable-dragging > .widget {
+  box-shadow:
+    0 18px 48px var(--shadow),
+    0 0 0 2px rgba(23, 36, 30, 0.18);
+}
+
 .widget {
   position: relative;
   display: flex;
   width: 100%;
+  container-type: inline-size;
   min-height: 260px;
   flex-direction: column;
   gap: 18px;
@@ -954,6 +982,16 @@ h1 {
 
 .widget.tall {
   min-height: 420px;
+}
+
+.react-grid-item > .widget,
+.react-grid-item > .widget.mini,
+.react-grid-item > .widget.compact,
+.react-grid-item > .widget.wide,
+.react-grid-item > .widget.tall,
+.react-grid-item > .widget.large,
+.react-grid-item > .widget.full {
+  min-height: 0;
 }
 
 .widget.dragging {
@@ -1050,21 +1088,163 @@ h1 {
 
 .widget-heading div {
   display: flex;
+  flex: 1 1 auto;
   min-width: 0;
   gap: 8px;
   align-items: center;
 }
 
 .widget h2 {
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
   font-size: 1.75rem;
   line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.widget-scale {
+  display: grid;
+  flex: 0 0 auto;
+  min-width: 48px;
+  gap: 4px;
+  justify-items: end;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.widget-scale-label {
+  line-height: 1;
+}
+
+.widget-scale-bars {
+  display: grid;
+  grid-template-columns: repeat(12, 3px);
+  gap: 2px;
+  align-items: end;
+}
+
+.widget-scale-bars i {
+  display: block;
+  width: 3px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border-strong);
+}
+
+.widget-scale-bars i.active {
+  background: var(--muted-strong);
 }
 
 .widget-body {
   display: grid;
+  flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
   gap: inherit;
+}
+
+.water-widget {
+  display: grid;
+  min-height: 0;
+  gap: inherit;
+}
+
+.water-widget.has-chart {
+  height: 100%;
+  grid-template-rows: auto minmax(160px, 1fr);
+}
+
+.water-widget.has-details.has-chart {
+  grid-template-rows: auto auto minmax(180px, 1fr);
+}
+
+.water-widget.has-chart .chart-card {
+  min-height: 0;
+  height: 100%;
+}
+
+.water-widget.has-chart .line-chart {
+  height: 100%;
+  min-height: 160px;
+}
+
+.widget[data-grid-columns="1"],
+.widget[data-grid-columns="2"],
+.widget[data-grid-columns="3"],
+.widget-short {
+  gap: 12px;
+  padding: 14px;
+}
+
+.widget[data-grid-columns="1"] .widget-heading,
+.widget[data-grid-columns="2"] .widget-heading,
+.widget[data-grid-columns="3"] .widget-heading {
+  gap: 8px;
+}
+
+.widget[data-grid-columns="1"] .widget-heading div,
+.widget[data-grid-columns="2"] .widget-heading div,
+.widget[data-grid-columns="3"] .widget-heading div {
+  gap: 6px;
+}
+
+.widget[data-grid-columns="1"] h2,
+.widget[data-grid-columns="2"] h2,
+.widget[data-grid-columns="3"] h2,
+.widget-short h2 {
+  font-size: 1.35rem;
+}
+
+.widget[data-grid-columns="1"] .widget-heading > span,
+.widget[data-grid-columns="2"] .widget-heading > span,
+.widget[data-grid-columns="3"] .widget-heading > span {
+  font-size: 0.72rem;
+}
+
+.widget[data-grid-columns="1"] .widget-scale,
+.widget[data-grid-columns="2"] .widget-scale,
+.widget[data-grid-columns="3"] .widget-scale {
+  min-width: 34px;
+  gap: 3px;
+}
+
+.widget[data-grid-columns="1"] .widget-scale-label,
+.widget[data-grid-columns="2"] .widget-scale-label,
+.widget[data-grid-columns="3"] .widget-scale-label {
+  font-size: 0.68rem;
+}
+
+.widget[data-grid-columns="1"] .widget-scale-bars,
+.widget[data-grid-columns="2"] .widget-scale-bars,
+.widget[data-grid-columns="3"] .widget-scale-bars {
+  grid-template-columns: repeat(12, 2px);
+  gap: 1px;
+}
+
+.widget[data-grid-columns="1"] .widget-scale-bars i,
+.widget[data-grid-columns="2"] .widget-scale-bars i,
+.widget[data-grid-columns="3"] .widget-scale-bars i {
+  width: 2px;
+  height: 7px;
+}
+
+.widget[data-grid-columns="1"] .drag-grip,
+.widget[data-grid-columns="2"] .drag-grip,
+.widget[data-grid-columns="3"] .drag-grip {
+  width: 20px;
+  height: 20px;
+}
+
+.widget-narrow .metric-row,
+.widget-narrow .detail-list {
+  grid-template-columns: 1fr;
+}
+
+.widget-wide .detail-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .drag-grip {
@@ -1117,6 +1297,22 @@ h1 {
   font-weight: 700;
 }
 
+.widget[data-grid-columns="1"] .hero-metric strong,
+.widget[data-grid-columns="2"] .hero-metric strong,
+.widget[data-grid-columns="3"] .hero-metric strong,
+.widget-short .hero-metric strong {
+  font-size: clamp(2.35rem, 24cqw, 4rem);
+  line-height: 0.95;
+}
+
+.widget[data-grid-columns="1"] .hero-metric span,
+.widget[data-grid-columns="2"] .hero-metric span,
+.widget[data-grid-columns="3"] .hero-metric span,
+.widget-short .hero-metric span {
+  font-size: 0.9rem;
+  line-height: 1.25;
+}
+
 .wind-widget {
   display: grid;
   gap: 18px;
@@ -1156,6 +1352,26 @@ h1 {
 .roof-rain-widget {
   display: grid;
   gap: 16px;
+}
+
+.widget-wide .roof-rain-widget {
+  grid-template-columns: minmax(0, 0.86fr) minmax(320px, 1.14fr);
+  align-items: start;
+}
+
+.widget-wide .roof-rain-hero,
+.widget-wide .roof-rain-widget > .metric-row,
+.widget-wide .roof-rain-widget > .source-line {
+  grid-column: 1;
+}
+
+.widget-wide .roof-rain-controls {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+}
+
+.widget-wide .roof-rain-widget > .source-line {
+  align-self: end;
 }
 
 .roof-rain-hero strong {
@@ -1244,9 +1460,25 @@ h1 {
   background: var(--surface-soft);
 }
 
+.widget[data-grid-columns="1"] .metric,
+.widget[data-grid-columns="2"] .metric,
+.widget[data-grid-columns="3"] .metric,
+.widget-short .metric {
+  min-height: 64px;
+  gap: 6px;
+  padding: 10px;
+}
+
 .metric strong {
   font-size: 1.2rem;
   overflow-wrap: anywhere;
+}
+
+.widget[data-grid-columns="1"] .metric strong,
+.widget[data-grid-columns="2"] .metric strong,
+.widget[data-grid-columns="3"] .metric strong,
+.widget-short .metric strong {
+  font-size: 1.05rem;
 }
 
 .metric span {
@@ -1254,6 +1486,13 @@ h1 {
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+}
+
+.widget[data-grid-columns="1"] .metric span,
+.widget[data-grid-columns="2"] .metric span,
+.widget[data-grid-columns="3"] .metric span,
+.widget-short .metric span {
+  font-size: 0.75rem;
 }
 
 .info-tooltip {

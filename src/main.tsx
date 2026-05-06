@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { Responsive, WidthProvider, type Layout } from "react-grid-layout/legacy";
 import { loadDashboardData, searchLocationChoices, type LocationChoice } from "./api";
 import {
   loadRoofRainSettings,
@@ -13,18 +14,30 @@ import {
   type RoofRainSettings
 } from "./storage";
 import type { DashboardData, DashboardSettings, ThemeMode, WidgetId, WidgetLayout, WidgetSize, ModeType } from "./types";
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
 import "./styles.css";
 
 type DropPosition = "before" | "after";
+type WidgetDensity = "narrow" | "normal" | "wide";
+type WidgetHeightDensity = "short" | "normal" | "tall";
 
-const MASONRY_GAP = 14;
-const AUTO_REFRESH_MAX_AGE_MS = 15 * 60 * 1000;
-
-type MasonryItemLayout = {
-  left: number;
-  top: number;
-  width: number;
+type WidgetPresentation = {
+  columns: number;
+  rows: number;
+  density: WidgetDensity;
+  heightDensity: WidgetHeightDensity;
 };
+
+const AUTO_REFRESH_MAX_AGE_MS = 15 * 60 * 1000;
+const GRID_COLUMNS = 12;
+const GRID_ROW_HEIGHT = 20;
+const GRID_GAP: [number, number] = [14, 14];
+const GRID_ITEM_MIN_HEIGHT = 4;
+const GRID_BREAKPOINTS = { lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 };
+const GRID_BREAKPOINT_COLUMNS = { lg: 12, md: 12, sm: 6, xs: 1, xxs: 1 };
+
+const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const widgetMeta: Record<WidgetId, { title: string; accent: string }> = {
   place: { title: "PLZ-Kontext", accent: "slate" },
@@ -84,15 +97,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(() => shouldOpenHelpOnStart());
   const [showScrollTop, setShowScrollTop] = useState(false);
-  const [dragState, setDragState] = useState<{
-    id: WidgetId;
-    overId?: WidgetId;
-    position?: DropPosition;
-  } | null>(null);
-  const dashboardRef = useRef<HTMLElement | null>(null);
-  const widgetRefs = useRef(new Map<WidgetId, HTMLElement>());
-  const [masonryLayout, setMasonryLayout] = useState<Partial<Record<WidgetId, MasonryItemLayout>>>({});
-  const [masonryHeight, setMasonryHeight] = useState(0);
+  const [activeGridLayout, setActiveGridLayout] = useState<Layout>([]);
   const [systemPrefersDark, setSystemPrefersDark] = useState(() => {
     return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
@@ -111,9 +116,6 @@ function App() {
       ...current,
       currentMode: newMode
     }));
-    // Reset masonry layout when switching modes (widgets change)
-    setMasonryLayout({});
-    setMasonryHeight(0);
   }, []);
 
   const closeHelp = useCallback(() => {
@@ -208,106 +210,30 @@ function App() {
   }, []);
 
   const enabledWidgets = useMemo(() => currentConfig.widgets.filter((widget) => widget.enabled), [currentConfig.widgets]);
+  const gridLayout = useMemo(
+    () => buildGridLayout(currentConfig.widgets, currentConfig.gridLayout),
+    [currentConfig.gridLayout, currentConfig.widgets]
+  );
+  const presentationLayout = hasLayoutForWidgets(activeGridLayout, enabledWidgets) ? activeGridLayout : gridLayout;
   const weatherTheme = getWeatherTheme(data);
   const activeTheme = settings.theme === "system" ? (systemPrefersDark ? "dark" : "standard") : settings.theme;
 
-  const updateMasonryLayout = useCallback(() => {
-    const dashboard = dashboardRef.current;
-    if (!dashboard || enabledWidgets.length === 0) {
-      setMasonryLayout({});
-      setMasonryHeight(0);
-      return;
-    }
-
-    const width = dashboard.clientWidth;
-    const columns = getMasonryColumnCount(width);
-    const columnWidth = (width - MASONRY_GAP * (columns - 1)) / columns;
-    const columnHeights = Array.from({ length: columns }, () => 0);
-    const nextLayout: Partial<Record<WidgetId, MasonryItemLayout>> = {};
-
-    for (const widget of enabledWidgets) {
-      const span = Math.min(getMasonrySpan(widget.size), columns);
-      const element = widgetRefs.current.get(widget.id);
-      const measuredHeight = element ? Math.ceil(element.getBoundingClientRect().height) : getDefaultHeight(widget.size);
-      let column = 0;
-      let top = 0;
-
-      if (span === columns) {
-        top = Math.max(...columnHeights);
-      } else {
-        let bestHeight = Number.POSITIVE_INFINITY;
-        for (let index = 0; index <= columns - span; index += 1) {
-          const candidateHeight = Math.max(...columnHeights.slice(index, index + span));
-          if (candidateHeight < bestHeight) {
-            bestHeight = candidateHeight;
-            column = index;
-            top = candidateHeight;
-          }
-        }
-      }
-
-      const itemWidth = columnWidth * span + MASONRY_GAP * (span - 1);
-      nextLayout[widget.id] = {
-        left: column * (columnWidth + MASONRY_GAP),
-        top,
-        width: itemWidth
-      };
-
-      const nextHeight = top + measuredHeight + MASONRY_GAP;
-      for (let index = column; index < column + span; index += 1) {
-        columnHeights[index] = nextHeight;
-      }
-    }
-
-    setMasonryLayout(nextLayout);
-    setMasonryHeight(Math.max(0, Math.max(...columnHeights) - MASONRY_GAP));
-  }, [enabledWidgets]);
-
-  useLayoutEffect(() => {
-    updateMasonryLayout();
-  }, [updateMasonryLayout, data?.updatedAt]);
-
   useEffect(() => {
-    const dashboard = dashboardRef.current;
-    if (!dashboard) return;
-
-    const observer = new ResizeObserver(updateMasonryLayout);
-    observer.observe(dashboard);
-    for (const widget of enabledWidgets) {
-      const element = widgetRefs.current.get(widget.id);
-      if (element) observer.observe(element);
-    }
-
-    window.addEventListener("resize", updateMasonryLayout);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", updateMasonryLayout);
-    };
-  }, [enabledWidgets, updateMasonryLayout]);
-
-  const registerWidgetRef = useCallback(
-    (id: WidgetId) => (element: HTMLElement | null) => {
-      if (element) {
-        widgetRefs.current.set(id, element);
-      } else {
-        widgetRefs.current.delete(id);
-      }
-      window.requestAnimationFrame(updateMasonryLayout);
-    },
-    [updateMasonryLayout]
-  );
+    setActiveGridLayout([]);
+  }, [currentMode]);
 
   function updateWidget(id: WidgetId, patch: Partial<WidgetLayout>) {
     setSettings((current) => {
       const isHunting = current.currentMode === "hunting";
       const config = isHunting ? current.huntingConfig : current.standardConfig;
+      const nextWidgets = config.widgets.map((widget) =>
+        widget.id === id ? { ...widget, ...patch } : widget
+      );
       return {
         ...current,
         [isHunting ? "huntingConfig" : "standardConfig"]: {
           ...config,
-          widgets: config.widgets.map((widget) =>
-            widget.id === id ? { ...widget, ...patch } : widget
-          )
+          widgets: nextWidgets
         }
       };
     });
@@ -344,6 +270,42 @@ function App() {
         [isHunting ? "huntingConfig" : "standardConfig"]: {
           ...config,
           widgets
+        }
+      };
+    });
+  }
+
+  function saveGridLayout(layout: Layout) {
+    setSettings((current) => {
+      const isHunting = current.currentMode === "hunting";
+      const config = isHunting ? current.huntingConfig : current.standardConfig;
+      const existingGridLayout = config.gridLayout ?? {};
+      const nextGridLayout = Object.fromEntries(
+        layout.map((item) => [
+          item.i as WidgetId,
+          {
+            x: item.x,
+            y: item.y,
+            w: item.w,
+            h: item.h
+          }
+        ])
+      );
+      const layoutChanged = Object.entries(nextGridLayout).some(([id, item]) => {
+        const existing = existingGridLayout[id as WidgetId];
+        return !existing || existing.x !== item.x || existing.y !== item.y || existing.w !== item.w || existing.h !== item.h;
+      });
+
+      if (!layoutChanged) return current;
+
+      return {
+        ...current,
+        [isHunting ? "huntingConfig" : "standardConfig"]: {
+          ...config,
+          gridLayout: {
+            ...(config.gridLayout ?? {}),
+            ...nextGridLayout
+          }
         }
       };
     });
@@ -446,38 +408,40 @@ function App() {
       {error && <p className="message notice">{error}</p>}
       {loading && <p className="message">Daten werden geladen...</p>}
 
-      <section className="dashboard-grid" aria-label="Dashboard Widgets" ref={dashboardRef} style={{ height: masonryHeight || undefined }}>
-        {data &&
-          enabledWidgets.map((widget) => (
-            <WidgetFrame
-              key={`${widget.id}-${data.updatedAt}`}
-              widget={widget}
-              layout={masonryLayout[widget.id]}
-              widgetRef={registerWidgetRef(widget.id)}
-              dragState={dragState}
-              onDragStart={(event) => {
-                event.dataTransfer.effectAllowed = "move";
-                event.dataTransfer.setData("text/plain", widget.id);
-                setDragState({ id: widget.id });
-              }}
-              onDragOver={(event) => {
-                if (!dragState || dragState.id === widget.id) return;
-                event.preventDefault();
-                const rect = event.currentTarget.getBoundingClientRect();
-                const isAfter = event.clientY > rect.top + rect.height / 2 || event.clientX > rect.left + rect.width / 2;
-                setDragState({ id: dragState.id, overId: widget.id, position: isAfter ? "after" : "before" });
-              }}
-              onDrop={(event) => {
-                event.preventDefault();
-                const draggedId = dragState?.id ?? (event.dataTransfer.getData("text/plain") as WidgetId);
-                if (draggedId && dragState?.position) moveWidgetTo(draggedId, widget.id, dragState.position);
-                setDragState(null);
-              }}
-              onDragEnd={() => setDragState(null)}
-            >
-              {renderWidget(widget.id, data)}
-            </WidgetFrame>
-          ))}
+      <section className="dashboard-grid" aria-label="Dashboard Widgets">
+        {data && (
+          <ResponsiveGridLayout
+            className="react-grid-dashboard"
+            layouts={{ lg: gridLayout }}
+            breakpoints={GRID_BREAKPOINTS}
+            cols={GRID_BREAKPOINT_COLUMNS}
+            rowHeight={GRID_ROW_HEIGHT}
+            margin={GRID_GAP}
+            containerPadding={[0, 0]}
+            compactType="vertical"
+            draggableHandle=".drag-grip"
+            isBounded
+            isResizable
+            resizeHandles={["e", "s", "se"]}
+            onLayoutChange={(layout, layouts) => {
+              setActiveGridLayout(layout);
+              saveGridLayout(layouts.lg ?? gridLayout);
+            }}
+          >
+            {enabledWidgets.map((widget) => {
+              const layoutItem = presentationLayout.find((item) => item.i === widget.id);
+              const defaultSize = getGridSize(widget.size);
+              const presentation = getWidgetPresentation(layoutItem?.w ?? defaultSize.w, layoutItem?.h ?? defaultSize.h);
+              return (
+                <div key={widget.id}>
+                  <WidgetFrame widget={widget} presentation={presentation}>
+                    {renderWidget(widget.id, data, presentation)}
+                  </WidgetFrame>
+                </div>
+              );
+            })}
+          </ResponsiveGridLayout>
+        )}
       </section>
 
       <footer>
@@ -589,7 +553,7 @@ function HelpPanel({ onClose, onOpenWidgets }: { onClose: () => void; onOpenWidg
           </section>
           <section>
             <h3>Widgets anpassen</h3>
-            <p>Im Widget-Panel kannst du Widgets ein- und ausschalten, Größen ändern, Reihenfolge ziehen und Rubriken einklappen.</p>
+            <p>Im Widget-Panel kannst du Widgets ein- und ausschalten, Reihenfolge ziehen und Rubriken einklappen. Die Größe änderst du direkt im Dashboard.</p>
           </section>
           <section>
             <h3>Aktualisierung</h3>
@@ -761,19 +725,6 @@ function WidgetSettingsPanel({
                           />
                           {widgetMeta[widget.id].title}
                         </label>
-                        <select
-                          value={widget.size}
-                          onChange={(event) => onUpdate(widget.id, { size: event.target.value as WidgetSize })}
-                          aria-label={`${widgetMeta[widget.id].title} Größe`}
-                          draggable={false}
-                        >
-                          <option value="mini">Mini</option>
-                          <option value="compact">Kompakt</option>
-                          <option value="wide">Breit</option>
-                          <option value="tall">Hoch</option>
-                          <option value="large">Groß</option>
-                          <option value="full">Volle Breite</option>
-                        </select>
                       </article>
                     );
                   })}
@@ -789,65 +740,52 @@ function WidgetSettingsPanel({
 
 function WidgetFrame({
   widget,
-  layout,
-  widgetRef,
-  dragState,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onDragEnd,
+  presentation,
   children
 }: {
   widget: WidgetLayout;
-  layout?: MasonryItemLayout;
-  widgetRef: (element: HTMLElement | null) => void;
-  dragState: { id: WidgetId; overId?: WidgetId; position?: DropPosition } | null;
-  onDragStart: (event: React.DragEvent<HTMLElement>) => void;
-  onDragOver: (event: React.DragEvent<HTMLElement>) => void;
-  onDrop: (event: React.DragEvent<HTMLElement>) => void;
-  onDragEnd: () => void;
+  presentation: WidgetPresentation;
   children: React.ReactNode;
 }) {
-  const dropClass = dragState?.overId === widget.id ? `drop-${dragState.position}` : "";
-  const widgetStyle: React.CSSProperties = {
-    ...(layout
-      ? {
-          position: "absolute",
-          width: `${layout.width}px`,
-          transform: `translate3d(${layout.left}px, ${layout.top}px, 0)`
-        }
-      : {})
-  };
-
   return (
     <article
-      ref={widgetRef}
-      className={`widget ${widget.size} ${widgetMeta[widget.id].accent} ${dragState?.id === widget.id ? "dragging" : ""} ${dropClass}`}
-      style={widgetStyle}
-      draggable
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onDragEnd={onDragEnd}
+      className={`widget ${widget.size} ${widgetMeta[widget.id].accent} widget-${presentation.density} widget-${presentation.heightDensity}`}
+      data-grid-columns={presentation.columns}
+      data-grid-rows={presentation.rows}
     >
       <div className="widget-heading">
         <div>
           <span className="drag-grip" aria-hidden="true" />
           <h2>{widgetMeta[widget.id].title}</h2>
         </div>
-        <span>{sizeLabel(widget.size)}</span>
+        <WidgetScale columns={presentation.columns} rows={presentation.rows} />
       </div>
       <div className="widget-body">{children}</div>
     </article>
   );
 }
 
-function renderWidget(id: WidgetId, data: DashboardData) {
+function WidgetScale({ columns, rows }: { columns: number; rows: number }) {
+  return (
+    <span className="widget-scale" aria-label={`${columns} von 12 Spalten, ${rows} Zeilen`} title={`${columns}/12 Spalten · ${rows} Zeilen`}>
+      <span className="widget-scale-label">
+        {columns}/12 · {rows}h
+      </span>
+      <span className="widget-scale-bars" aria-hidden="true">
+        {Array.from({ length: GRID_COLUMNS }, (_, index) => (
+          <i key={index} className={index < columns ? "active" : ""} />
+        ))}
+      </span>
+    </span>
+  );
+}
+
+function renderWidget(id: WidgetId, data: DashboardData, presentation: WidgetPresentation) {
   switch (id) {
     case "place":
       return <PlaceWidget data={data} />;
     case "weather":
-      return <WeatherWidget data={data} />;
+      return <WeatherWidget data={data} presentation={presentation} />;
     case "dwdWeather":
       return <DwdWeatherWidget data={data} />;
     case "pollen":
@@ -865,9 +803,9 @@ function renderWidget(id: WidgetId, data: DashboardData) {
     case "moon":
       return <MoonWidget data={data} />;
     case "water":
-      return <WaterWidget data={data} />;
+      return <WaterWidget data={data} presentation={presentation} />;
     case "roofRain":
-      return <RoofRainWidget data={data} />;
+      return <RoofRainWidget data={data} presentation={presentation} />;
     case "wind":
       return <WindWidget data={data} />;
     case "humidity": {
@@ -948,39 +886,50 @@ function PlaceWidget({ data }: { data: DashboardData }) {
   );
 }
 
-function WeatherWidget({ data }: { data: DashboardData }) {
+function WeatherWidget({ data, presentation }: { data: DashboardData; presentation: WidgetPresentation }) {
   const current = data.weather.current;
   const nextHourIndexes = getUpcomingHourIndexes(data.weather.hourly.time, 8);
   const dayHours = data.weather.hourly.time.slice(0, 24);
+  const showMetrics = presentation.rows >= 6;
+  const showHourlyStrip = presentation.density !== "narrow" && presentation.rows >= 11;
+  const showChart = presentation.rows >= 12;
   return (
     <>
       <div className="hero-metric">
         <strong>{formatNumber(current.temperature, "°C")}</strong>
         <span>{labelWeather(current.weatherCode)} · gefühlt {formatNumber(current.apparentTemperature, "°C")}</span>
       </div>
-      <div className="metric-row">
-        <Metric label="Feuchte" value={formatNumber(current.humidity, "%")} />
-        <Metric label="Wind" value={formatNumber(current.windSpeed, " km/h")} />
-        <Metric label="Regen jetzt" value={formatNumber(current.precipitation, " mm")} />
-      </div>
-      <div className="hourly-strip-heading">
-        <strong>Nächste Stunden</strong>
-        <span>Temperatur · Regenchance</span>
-      </div>
-      <div className="spark-list">
-        {nextHourIndexes.map((hourIndex, position) => (
-          <div key={data.weather.hourly.time[hourIndex]}>
-            <span>{position === 0 ? "Jetzt" : formatHour(data.weather.hourly.time[hourIndex])}</span>
-            <strong>{formatNumber(data.weather.hourly.temperature[hourIndex], "°")}</strong>
-            <small>Regen {formatNumber(data.weather.hourly.precipitationProbability[hourIndex], "%")}</small>
+      {showMetrics ? (
+        <div className="metric-row">
+          <Metric label="Feuchte" value={formatNumber(current.humidity, "%")} />
+          <Metric label="Wind" value={formatNumber(current.windSpeed, " km/h")} />
+          <Metric label="Regen jetzt" value={formatNumber(current.precipitation, " mm")} />
+        </div>
+      ) : null}
+      {showHourlyStrip ? (
+        <>
+          <div className="hourly-strip-heading">
+            <strong>Nächste Stunden</strong>
+            <span>Temperatur · Regenchance</span>
           </div>
-        ))}
-      </div>
-      <WeatherTrendChart
-        times={dayHours}
-        temperatures={data.weather.hourly.temperature.slice(0, 24)}
-        precipitation={data.weather.hourly.precipitationProbability.slice(0, 24)}
-      />
+          <div className="spark-list">
+            {nextHourIndexes.map((hourIndex, position) => (
+              <div key={data.weather.hourly.time[hourIndex]}>
+                <span>{position === 0 ? "Jetzt" : formatHour(data.weather.hourly.time[hourIndex])}</span>
+                <strong>{formatNumber(data.weather.hourly.temperature[hourIndex], "°")}</strong>
+                <small>Regen {formatNumber(data.weather.hourly.precipitationProbability[hourIndex], "%")}</small>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : null}
+      {showChart ? (
+        <WeatherTrendChart
+          times={dayHours}
+          temperatures={data.weather.hourly.temperature.slice(0, 24)}
+          precipitation={data.weather.hourly.precipitationProbability.slice(0, 24)}
+        />
+      ) : null}
     </>
   );
 }
@@ -1173,27 +1122,33 @@ function MoonWidget({ data }: { data: DashboardData }) {
   );
 }
 
-function WaterWidget({ data }: { data: DashboardData }) {
+function WaterWidget({ data, presentation }: { data: DashboardData; presentation: WidgetPresentation }) {
   const water = data.water;
   if (!water) return <p className="empty">Kein PEGELONLINE-Pegel im näheren Umfeld gefunden.</p>;
+  const showChart = presentation.rows >= 12;
+  const showDetails =
+    presentation.rows >= 8 &&
+    (!showChart || presentation.rows >= 24 || (presentation.density === "wide" && presentation.rows >= 18));
   return (
-    <>
+    <div className={`water-widget ${showDetails ? "has-details" : ""} ${showChart ? "has-chart" : ""}`}>
       <div className="hero-metric">
         <strong>{formatNumber(water.value, ` ${water.unit}`)}</strong>
         <span>{water.stationName}</span>
       </div>
-      <div className="detail-list">
-        <Metric label="Gewässer" value={water.waterName} />
-        <Metric label="Entfernung" value={formatDistance(water.distance)} />
-        <Metric label="Status" value={translateWaterState(water.state)} />
-        <Metric label="Nächste Tide" value={formatNextTide(water.nextTide)} />
-      </div>
-      <WaterLevelChart history={water.history} unit={water.unit} />
-    </>
+      {showDetails ? (
+        <div className="detail-list">
+          <Metric label="Gewässer" value={water.waterName} />
+          <Metric label="Entfernung" value={formatDistance(water.distance)} />
+          <Metric label="Status" value={translateWaterState(water.state)} />
+          <Metric label="Nächste Tide" value={formatNextTide(water.nextTide)} />
+        </div>
+      ) : null}
+      {showChart ? <WaterLevelChart history={water.history} unit={water.unit} /> : null}
+    </div>
   );
 }
 
-function RoofRainWidget({ data }: { data: DashboardData }) {
+function RoofRainWidget({ data, presentation }: { data: DashboardData; presentation: WidgetPresentation }) {
   const [settings, setSettings] = useState<RoofRainSettings>(() => loadRoofRainSettings());
   const rainForTimeframe = getNextPrecipitation(
     data.weather.current.time,
@@ -1205,6 +1160,9 @@ function RoofRainWidget({ data }: { data: DashboardData }) {
   const projectedArea = settings.areaMode === "roof" ? activeArea * Math.cos((settings.roofPitch * Math.PI) / 180) : activeArea;
   const collectedLiters = rainForTimeframe === null ? null : rainForTimeframe * projectedArea * settings.runoffFactor;
   const areaModeLabel = settings.areaMode === "roof" ? `Schrägdach ${settings.roofPitch}°` : "Grundfläche";
+  const showMetrics = presentation.rows >= 7;
+  const showControls = presentation.rows >= 13;
+  const showSource = presentation.rows >= 9;
 
   const updateAreaInput = (value: string) => {
     const area = value.trim() === "" ? 0 : Number(value);
@@ -1223,25 +1181,28 @@ function RoofRainWidget({ data }: { data: DashboardData }) {
   };
 
   return (
-    <div className="roof-rain-widget">
+    <div className={`roof-rain-widget roof-rain-${presentation.density}`}>
       <div className="hero-metric roof-rain-hero">
         <strong>{collectedLiters === null ? "n/a" : `${formatCompactLiters(collectedLiters)} L`}</strong>
         <span>in den nächsten {settings.timeframeHours} Stunden</span>
       </div>
-      <div className="metric-row">
-        <Metric label="Regen" value={rainForTimeframe === null ? "n/a" : `${formatDecimal(rainForTimeframe, 1)} mm`} />
-        <Metric
-          label={
-            <>
-              Auffangfläche
-              <InfoTooltip text="Regen wird auf die horizontale Grundfläche gemessen. Bei Schrägdächern rechnet das Widget die angegebene Dachfläche über cos(Dachneigung) auf diese Auffangfläche um." />
-            </>
-          }
-          value={`${formatDecimal(projectedArea, 0)} m²`}
-        />
-        <Metric label="Abfluss" value={`${Math.round(settings.runoffFactor * 100)}%`} />
-      </div>
-      <div className="roof-rain-controls" onPointerDown={(event) => event.stopPropagation()} onDragStart={(event) => event.preventDefault()}>
+      {showMetrics ? (
+        <div className="metric-row">
+          <Metric label="Regen" value={rainForTimeframe === null ? "n/a" : `${formatDecimal(rainForTimeframe, 1)} mm`} />
+          <Metric
+            label={
+              <>
+                Auffangfläche
+                <InfoTooltip text="Regen wird auf die horizontale Grundfläche gemessen. Bei Schrägdächern rechnet das Widget die angegebene Dachfläche über cos(Dachneigung) auf diese Auffangfläche um." />
+              </>
+            }
+            value={`${formatDecimal(projectedArea, 0)} m²`}
+          />
+          <Metric label="Abfluss" value={`${Math.round(settings.runoffFactor * 100)}%`} />
+        </div>
+      ) : null}
+      {showControls ? (
+        <div className="roof-rain-controls" onPointerDown={(event) => event.stopPropagation()} onDragStart={(event) => event.preventDefault()}>
         <div className="segmented-control timeframe-control" aria-label="Zeitraum">
           {[24, 48, 72].map((hours) => (
             <button
@@ -1302,11 +1263,14 @@ function RoofRainWidget({ data }: { data: DashboardData }) {
             <option value={1}>roh 100%</option>
           </select>
         </label>
-      </div>
-      <div className="source-line">
-        <strong>{areaModeLabel}</strong>
-        <span>Open-Meteo · {settings.timeframeHours}h Summe</span>
-      </div>
+        </div>
+      ) : null}
+      {showSource ? (
+        <div className="source-line">
+          <strong>{areaModeLabel}</strong>
+          <span>Open-Meteo · {settings.timeframeHours}h Summe</span>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1566,47 +1530,82 @@ function getUpcomingHourIndexes(times: string[], count: number) {
   return Array.from({ length: count }, (_, offset) => startIndex + offset).filter((index) => index < times.length);
 }
 
-function getDefaultHeight(size: WidgetSize): number {
+function buildGridLayout(
+  widgets: WidgetLayout[],
+  savedLayout: NonNullable<DashboardSettings["standardConfig"]["gridLayout"]> = {}
+) {
+  let cursorX = 0;
+  let cursorY = 0;
+  let rowHeight = 0;
+
+  return widgets
+    .filter((widget) => widget.enabled)
+    .map((widget) => {
+      const size = getGridSize(widget.size);
+      const saved = savedLayout[widget.id];
+      const height = saved?.h ?? size.h;
+
+      if (saved) {
+        const width = Math.min(Math.max(1, saved.w), GRID_COLUMNS);
+        return {
+          i: widget.id,
+          x: Math.min(Math.max(0, saved.x), GRID_COLUMNS - width),
+          y: Math.max(0, saved.y),
+          w: width,
+          h: height,
+          minH: GRID_ITEM_MIN_HEIGHT
+        };
+      }
+
+      if (cursorX + size.w > GRID_COLUMNS) {
+        cursorX = 0;
+        cursorY += rowHeight;
+        rowHeight = 0;
+      }
+
+      const item = {
+        i: widget.id,
+        x: cursorX,
+        y: cursorY,
+        w: size.w,
+        h: height,
+        minH: GRID_ITEM_MIN_HEIGHT
+      };
+      cursorX += size.w;
+      rowHeight = Math.max(rowHeight, height);
+      return item;
+    });
+}
+
+function getWidgetPresentation(columns: number, rows: number): WidgetPresentation {
+  const density = columns <= 4 ? "narrow" : columns <= 7 ? "normal" : "wide";
+  const heightDensity = rows <= 7 ? "short" : rows <= 12 ? "normal" : "tall";
+  return { columns, rows, density, heightDensity };
+}
+
+function hasLayoutForWidgets(layout: Layout, widgets: WidgetLayout[]) {
+  if (layout.length === 0) return false;
+  const layoutIds = new Set(layout.map((item) => item.i));
+  return widgets.every((widget) => layoutIds.has(widget.id));
+}
+
+function getGridSize(size: WidgetSize): { w: number; h: number } {
   switch (size) {
     case "mini":
-      return 200;
+      return { w: 4, h: 7 };
     case "compact":
-      return 260;
+      return { w: 4, h: 9 };
     case "wide":
-      return 260;
+      return { w: 8, h: 9 };
     case "tall":
-      return 420;
+      return { w: 4, h: 13 };
     case "large":
-      return 420;
+      return { w: 8, h: 13 };
     case "full":
-      return 260;
+      return { w: 12, h: 9 };
     default:
-      return 260;
+      return { w: 4, h: 9 };
   }
-}
-
-function getMasonryColumnCount(width: number) {
-  if (width < 960) return 1;
-  if (width < 1180) return 2;
-  return 3;
-}
-
-function getMasonrySpan(size: WidgetSize) {
-  if (size === "wide" || size === "large") return 2;
-  if (size === "full") return 3;
-  return 1;
-}
-
-function sizeLabel(size: WidgetSize) {
-  const labels: Record<WidgetSize, string> = {
-    mini: "Mini",
-    compact: "Kompakt",
-    wide: "Breit",
-    tall: "Hoch",
-    large: "Groß",
-    full: "Volle Breite"
-  };
-  return labels[size];
 }
 
 function maxToday(times: string[], values: Array<number | null>) {
