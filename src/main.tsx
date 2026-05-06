@@ -56,6 +56,23 @@ const widgetMeta: Record<WidgetId, { title: string; accent: string }> = {
   humidity: { title: "Luftfeuchte", accent: "water" }
 };
 
+const defaultGridSizeByWidget: Record<WidgetId, { w: number; h: number }> = {
+  weather: { w: 6, h: 15 },
+  place: { w: 4, h: 9 },
+  dwdWeather: { w: 4, h: 11 },
+  pollen: { w: 4, h: 12 },
+  dwdPollen: { w: 4, h: 17 },
+  air: { w: 4, h: 10 },
+  ubaAir: { w: 4, h: 11 },
+  warnings: { w: 4, h: 6 },
+  sun: { w: 4, h: 10 },
+  moon: { w: 4, h: 14 },
+  water: { w: 5, h: 18 },
+  roofRain: { w: 5, h: 15 },
+  wind: { w: 4, h: 16 },
+  humidity: { w: 3, h: 7 }
+};
+
 const weatherLabels = new Map<number, string>([
   [0, "Klar"],
   [1, "Überwiegend klar"],
@@ -430,7 +447,7 @@ function App() {
           >
             {enabledWidgets.map((widget) => {
               const layoutItem = presentationLayout.find((item) => item.i === widget.id);
-              const defaultSize = getGridSize(widget.size);
+              const defaultSize = getDefaultGridSize(widget);
               const presentation = getWidgetPresentation(layoutItem?.w ?? defaultSize.w, layoutItem?.h ?? defaultSize.h);
               return (
                 <div key={widget.id}>
@@ -1541,7 +1558,7 @@ function buildGridLayout(
   return widgets
     .filter((widget) => widget.enabled)
     .map((widget) => {
-      const size = getGridSize(widget.size);
+      const size = getDefaultGridSize(widget);
       const saved = savedLayout[widget.id];
       const height = saved?.h ?? size.h;
 
@@ -1587,6 +1604,10 @@ function hasLayoutForWidgets(layout: Layout, widgets: WidgetLayout[]) {
   if (layout.length === 0) return false;
   const layoutIds = new Set(layout.map((item) => item.i));
   return widgets.every((widget) => layoutIds.has(widget.id));
+}
+
+function getDefaultGridSize(widget: WidgetLayout) {
+  return defaultGridSizeByWidget[widget.id] ?? getGridSize(widget.size);
 }
 
 function getGridSize(size: WidgetSize): { w: number; h: number } {
