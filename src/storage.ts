@@ -9,6 +9,7 @@ const ROOF_RAIN_SETTINGS_KEY = "plz-grid-dashboard:roof-rain:v1";
 export const DEFAULT_STANDARD_CONFIG: ModeConfiguration = {
   widgets: [
     { id: "weather", enabled: true, size: "mini" },
+    { id: "forecast", enabled: true, size: "wide" },
     { id: "place", enabled: true, size: "mini" },
     { id: "dwdWeather", enabled: true, size: "mini" },
     { id: "pollen", enabled: true, size: "mini" },
@@ -31,6 +32,7 @@ export const DEFAULT_STANDARD_CONFIG: ModeConfiguration = {
 export const DEFAULT_HUNTING_CONFIG: ModeConfiguration = {
   widgets: [
     { id: "weather", enabled: true, size: "mini" },
+    { id: "forecast", enabled: true, size: "wide" },
     { id: "pollen", enabled: true, size: "mini" },
     { id: "air", enabled: true, size: "mini" },
     { id: "warnings", enabled: true, size: "mini" },

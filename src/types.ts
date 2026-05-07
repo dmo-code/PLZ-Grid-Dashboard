@@ -1,5 +1,6 @@
 export type WidgetId =
   | "weather"
+  | "forecast"
   | "pollen"
   | "air"
   | "warnings"
@@ -93,6 +94,7 @@ export type WeatherData = {
     temperatureMax: Array<number | null>;
     temperatureMin: Array<number | null>;
     precipitationSum: Array<number | null>;
+    weatherCode: Array<number | null>;
     uvIndexMax: Array<number | null>;
     windSpeedMax: Array<number | null>;
     windGustsMax: Array<number | null>;

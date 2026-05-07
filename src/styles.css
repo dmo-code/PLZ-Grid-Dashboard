@@ -1605,6 +1605,226 @@ h1 {
   align-items: baseline;
 }
 
+.forecast-widget {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  height: 100%;
+}
+
+.forecast-widget.forecast-compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: start;
+  gap: 8px;
+}
+
+.forecast-day {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255, 255, 252, 0.88), rgba(238, 245, 241, 0.82));
+  border: 1px solid rgba(29, 47, 39, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.theme-dark .forecast-day {
+  background: linear-gradient(180deg, rgba(29, 39, 33, 0.92), rgba(22, 30, 25, 0.88));
+  border-color: var(--border);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.forecast-day-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: start;
+}
+
+.forecast-day-heading div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.forecast-day-heading span,
+.forecast-temp span,
+.forecast-summary span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.forecast-day-heading strong {
+  overflow-wrap: anywhere;
+}
+
+.forecast-symbol {
+  position: relative;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #f7c948;
+  box-shadow: 0 0 0 6px rgba(247, 201, 72, 0.16);
+}
+
+.forecast-symbol.cloud,
+.forecast-symbol.fog,
+.forecast-symbol.unknown {
+  background: #9aa8a0;
+  box-shadow: 0 0 0 6px rgba(154, 168, 160, 0.18);
+}
+
+.forecast-symbol.rain,
+.forecast-symbol.storm {
+  background: #4f8eb8;
+  box-shadow: 0 0 0 6px rgba(79, 142, 184, 0.16);
+}
+
+.forecast-symbol.snow {
+  background: #d9edf3;
+  box-shadow: 0 0 0 6px rgba(118, 167, 184, 0.16);
+}
+
+.forecast-symbol::after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  bottom: 4px;
+  width: 22px;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: -12px 2px 0 -4px rgba(255, 255, 255, 0.78);
+  opacity: 0;
+}
+
+.forecast-symbol.cloud::after,
+.forecast-symbol.rain::after,
+.forecast-symbol.storm::after,
+.forecast-symbol.snow::after,
+.forecast-symbol.fog::after,
+.forecast-symbol.unknown::after {
+  opacity: 1;
+}
+
+.forecast-temp {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.forecast-temp strong {
+  font-size: 2.35rem;
+  line-height: 1;
+}
+
+.forecast-bars {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(34, 56, 45, 0.1);
+}
+
+.forecast-bars span {
+  display: block;
+  width: var(--forecast-temp);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #5ea8a7, #f0bf54, #d96d4a);
+}
+
+.theme-dark .forecast-bars {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.forecast-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  align-self: end;
+}
+
+.forecast-detail-grid .metric {
+  padding: 9px;
+}
+
+.forecast-summary {
+  align-self: end;
+  flex-wrap: wrap;
+}
+
+.forecast-compact .forecast-day {
+  padding: 10px;
+  gap: 9px;
+}
+
+.forecast-compact .forecast-day-heading {
+  gap: 6px;
+}
+
+.forecast-compact .forecast-day-heading span,
+.forecast-compact .forecast-temp span,
+.forecast-compact .forecast-summary span {
+  font-size: 0.72rem;
+}
+
+.forecast-compact .forecast-day-heading strong {
+  font-size: 0.84rem;
+}
+
+.forecast-compact .forecast-symbol {
+  flex-basis: 24px;
+  width: 24px;
+  height: 24px;
+  box-shadow: 0 0 0 4px rgba(247, 201, 72, 0.14);
+}
+
+.forecast-compact .forecast-symbol.cloud,
+.forecast-compact .forecast-symbol.fog,
+.forecast-compact .forecast-symbol.unknown {
+  box-shadow: 0 0 0 4px rgba(154, 168, 160, 0.16);
+}
+
+.forecast-compact .forecast-symbol.rain,
+.forecast-compact .forecast-symbol.storm {
+  box-shadow: 0 0 0 4px rgba(79, 142, 184, 0.14);
+}
+
+.forecast-compact .forecast-symbol.snow {
+  box-shadow: 0 0 0 4px rgba(118, 167, 184, 0.14);
+}
+
+.forecast-compact .forecast-symbol::after {
+  right: -2px;
+  bottom: 3px;
+  width: 16px;
+  height: 9px;
+  box-shadow: -8px 1px 0 -3px rgba(255, 255, 255, 0.78);
+}
+
+.forecast-compact .forecast-temp {
+  display: grid;
+  gap: 3px;
+}
+
+.forecast-compact .forecast-temp strong {
+  font-size: clamp(1.45rem, 7vw, 2rem);
+}
+
+.forecast-compact .forecast-detail-grid {
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.forecast-compact .forecast-detail-grid .metric {
+  padding: 7px;
+}
+
 .chart-heading strong {
   font-size: 0.95rem;
 }

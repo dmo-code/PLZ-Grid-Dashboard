@@ -42,6 +42,7 @@ const ResponsiveGridLayout = WidthProvider(Responsive);
 const widgetMeta: Record<WidgetId, { title: string; accent: string }> = {
   place: { title: "PLZ-Kontext", accent: "slate" },
   weather: { title: "Wetter", accent: "sky" },
+  forecast: { title: "3-Tage-Vorhersage", accent: "sky" },
   dwdWeather: { title: "DWD Wetter", accent: "blue" },
   pollen: { title: "Pollenflug", accent: "grass" },
   dwdPollen: { title: "DWD Pollen", accent: "leaf" },
@@ -58,6 +59,7 @@ const widgetMeta: Record<WidgetId, { title: string; accent: string }> = {
 
 const defaultGridSizeByWidget: Record<WidgetId, { w: number; h: number }> = {
   weather: { w: 6, h: 15 },
+  forecast: { w: 8, h: 12 },
   place: { w: 4, h: 9 },
   dwdWeather: { w: 4, h: 11 },
   pollen: { w: 4, h: 12 },
@@ -97,11 +99,11 @@ const weatherLabels = new Map<number, string>([
 
 const widgetCategories = [
   { id: "context", title: "Standort & Kontext", ids: ["place"] as WidgetId[] },
-  { id: "weather", title: "Wetter", ids: ["weather", "dwdWeather", "warnings"] as WidgetId[] },
+  { id: "weather", title: "Wetter", ids: ["weather", "forecast", "dwdWeather", "warnings"] as WidgetId[] },
   { id: "air", title: "Luft & Umwelt", ids: ["pollen", "dwdPollen", "air", "ubaAir", "humidity"] as WidgetId[] },
   { id: "sunMoon", title: "Sonne & Mond", ids: ["sun", "moon"] as WidgetId[] },
   { id: "waterEnergy", title: "Wasser", ids: ["water", "roofRain"] as WidgetId[] },
-  { id: "hunt", title: "Jagd", ids: ["moon", "weather", "sun", "warnings", "air", "pollen", "wind", "humidity"] as WidgetId[] }
+  { id: "hunt", title: "Jagd", ids: ["moon", "weather", "forecast", "sun", "warnings", "air", "pollen", "wind", "humidity"] as WidgetId[] }
 ];
 
 function App() {
@@ -803,6 +805,8 @@ function renderWidget(id: WidgetId, data: DashboardData, presentation: WidgetPre
       return <PlaceWidget data={data} />;
     case "weather":
       return <WeatherWidget data={data} presentation={presentation} />;
+    case "forecast":
+      return <ForecastWidget data={data} presentation={presentation} />;
     case "dwdWeather":
       return <DwdWeatherWidget data={data} />;
     case "pollen":
@@ -948,6 +952,65 @@ function WeatherWidget({ data, presentation }: { data: DashboardData; presentati
         />
       ) : null}
     </>
+  );
+}
+
+function ForecastWidget({ data, presentation }: { data: DashboardData; presentation: WidgetPresentation }) {
+  const days = data.weather.daily.time.slice(0, 3).map((time, index) => ({
+    time,
+    label: formatForecastDay(time, index),
+    weatherCode: data.weather.daily.weatherCode[index] ?? null,
+    temperatureMax: data.weather.daily.temperatureMax[index] ?? null,
+    temperatureMin: data.weather.daily.temperatureMin[index] ?? null,
+    precipitationSum: data.weather.daily.precipitationSum[index] ?? null,
+    uvIndexMax: data.weather.daily.uvIndexMax[index] ?? null,
+    windSpeedMax: data.weather.daily.windSpeedMax[index] ?? null,
+    windGustsMax: data.weather.daily.windGustsMax[index] ?? null
+  }));
+
+  if (days.length === 0) return <p className="empty">Keine Vorhersagedaten verfügbar.</p>;
+
+  const showDetails = presentation.rows >= 9;
+  const compact = presentation.density === "narrow";
+
+  return (
+    <div className={`forecast-widget ${compact ? "forecast-compact" : ""}`}>
+      {days.map((day) => (
+        <section key={day.time} className="forecast-day">
+          <div className="forecast-day-heading">
+            <div>
+              <span>{day.label}</span>
+              <strong>{labelWeather(day.weatherCode)}</strong>
+            </div>
+            <span className={`forecast-symbol ${getWeatherSymbolClass(day.weatherCode)}`} aria-hidden="true" />
+          </div>
+          <div className="forecast-temp">
+            <strong>{formatNumber(day.temperatureMax, "°")}</strong>
+            <span>{formatNumber(day.temperatureMin, "°")} min</span>
+          </div>
+          <div className="forecast-bars" aria-hidden="true">
+            <span style={{ "--forecast-temp": getTemperatureBar(day.temperatureMax) } as React.CSSProperties} />
+          </div>
+          {showDetails ? (
+            <div className="forecast-detail-grid">
+              <Metric label="Regen" value={formatNumber(day.precipitationSum, " mm")} />
+              <Metric label="UV" value={formatNumber(day.uvIndexMax, "")} />
+              {compact ? null : (
+                <>
+                  <Metric label="Wind" value={formatNumber(day.windSpeedMax, " km/h")} />
+                  <Metric label="Böen" value={formatNumber(day.windGustsMax, " km/h")} />
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="source-line forecast-summary">
+              <span>{formatNumber(day.precipitationSum, " mm")} Regen</span>
+              <span>{formatNumber(day.windSpeedMax, " km/h")} Wind</span>
+            </div>
+          )}
+        </section>
+      ))}
+    </div>
   );
 }
 
@@ -1742,6 +1805,13 @@ function formatHour(value: string) {
   return new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 }
 
+function formatForecastDay(value: string, index: number) {
+  if (index === 0) return "Heute";
+  if (index === 1) return "Morgen";
+  if (!value) return "Tag";
+  return new Intl.DateTimeFormat("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" }).format(new Date(value));
+}
+
 function formatMoonEvent(value: string | null, moon: DashboardData["moon"]) {
   if (value) return formatHour(value);
   if (moon.alwaysUp) return "immer oben";
@@ -1770,6 +1840,21 @@ function formatEpoch(value: number) {
 
 function labelWeather(code: number | null) {
   return code === null ? "Unbekannt" : weatherLabels.get(code) ?? `Code ${code}`;
+}
+
+function getWeatherSymbolClass(code: number | null) {
+  if (code === null) return "unknown";
+  if ([95, 96, 99].includes(code)) return "storm";
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return "snow";
+  if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) return "rain";
+  if ([45, 48].includes(code)) return "fog";
+  if ([2, 3].includes(code)) return "cloud";
+  return "clear";
+}
+
+function getTemperatureBar(value: number | null) {
+  if (value === null) return "0%";
+  return `${Math.min(100, Math.max(8, ((value + 10) / 45) * 100))}%`;
 }
 
 function aqiLabel(value: number | null) {
