@@ -13,7 +13,7 @@ import {
   shouldOpenHelpOnStart,
   type RoofRainSettings
 } from "./storage";
-import type { DashboardData, DashboardSettings, ThemeMode, WidgetId, WidgetLayout, WidgetSize, ModeType } from "./types";
+import type { DashboardData, DashboardSettings, GridBreakpoint, ThemeMode, WidgetId, WidgetLayout, WidgetSize, ModeType } from "./types";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import "./styles.css";
@@ -28,6 +28,8 @@ type WidgetPresentation = {
   density: WidgetDensity;
   heightDensity: WidgetHeightDensity;
 };
+
+type GridLayouts = Partial<Record<GridBreakpoint, Layout>>;
 
 const AUTO_REFRESH_MAX_AGE_MS = 15 * 60 * 1000;
 const GRID_COLUMNS = 12;
@@ -117,6 +119,7 @@ function App() {
   const [helpOpen, setHelpOpen] = useState(() => shouldOpenHelpOnStart());
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [activeGridLayout, setActiveGridLayout] = useState<Layout>([]);
+  const [activeGridBreakpoint, setActiveGridBreakpoint] = useState<GridBreakpoint>("lg");
   const [systemPrefersDark, setSystemPrefersDark] = useState(() => {
     return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
@@ -229,10 +232,11 @@ function App() {
   }, []);
 
   const enabledWidgets = useMemo(() => currentConfig.widgets.filter((widget) => widget.enabled), [currentConfig.widgets]);
-  const gridLayout = useMemo(
-    () => buildGridLayout(currentConfig.widgets, currentConfig.gridLayout),
+  const gridLayouts = useMemo(
+    () => buildGridLayouts(currentConfig.widgets, currentConfig.gridLayout),
     [currentConfig.gridLayout, currentConfig.widgets]
   );
+  const gridLayout = gridLayouts[activeGridBreakpoint] ?? gridLayouts.lg ?? [];
   const presentationLayout = hasLayoutForWidgets(activeGridLayout, enabledWidgets) ? activeGridLayout : gridLayout;
   const weatherTheme = getWeatherTheme(data);
   const activeTheme = settings.theme === "system" ? (systemPrefersDark ? "dark" : "standard") : settings.theme;
@@ -294,25 +298,18 @@ function App() {
     });
   }
 
-  function saveGridLayout(layout: Layout) {
+  function saveGridLayouts(layouts: GridLayouts) {
     setSettings((current) => {
       const isHunting = current.currentMode === "hunting";
       const config = isHunting ? current.huntingConfig : current.standardConfig;
       const existingGridLayout = config.gridLayout ?? {};
-      const nextGridLayout = Object.fromEntries(
-        layout.map((item) => [
-          item.i as WidgetId,
-          {
-            x: item.x,
-            y: item.y,
-            w: item.w,
-            h: item.h
-          }
-        ])
-      );
-      const layoutChanged = Object.entries(nextGridLayout).some(([id, item]) => {
-        const existing = existingGridLayout[id as WidgetId];
-        return !existing || existing.x !== item.x || existing.y !== item.y || existing.w !== item.w || existing.h !== item.h;
+      const nextGridLayout = gridLayoutsToStorage(layouts);
+      const layoutChanged = Object.entries(nextGridLayout).some(([breakpoint, breakpointLayout]) => {
+        const existingBreakpointLayout = existingGridLayout[breakpoint as GridBreakpoint] ?? {};
+        return Object.entries(breakpointLayout).some(([id, item]) => {
+          const existing = existingBreakpointLayout[id as WidgetId];
+          return !existing || existing.x !== item.x || existing.y !== item.y || existing.w !== item.w || existing.h !== item.h;
+        });
       });
 
       if (!layoutChanged) return current;
@@ -431,7 +428,7 @@ function App() {
         {data && (
           <ResponsiveGridLayout
             className="react-grid-dashboard"
-            layouts={{ lg: gridLayout }}
+            layouts={gridLayouts}
             breakpoints={GRID_BREAKPOINTS}
             cols={GRID_BREAKPOINT_COLUMNS}
             rowHeight={GRID_ROW_HEIGHT}
@@ -442,9 +439,14 @@ function App() {
             isBounded
             isResizable
             resizeHandles={["e", "s", "se"]}
-            onLayoutChange={(layout, layouts) => {
+            onBreakpointChange={(breakpoint) => {
+              if (isGridBreakpoint(breakpoint)) {
+                setActiveGridBreakpoint(breakpoint);
+              }
+            }}
+            onLayoutChange={(layout: Layout, layouts: GridLayouts) => {
               setActiveGridLayout(layout);
-              saveGridLayout(layouts.lg ?? gridLayout);
+              saveGridLayouts(layouts);
             }}
           >
             {enabledWidgets.map((widget) => {
@@ -1610,9 +1612,22 @@ function getUpcomingHourIndexes(times: string[], count: number) {
   return Array.from({ length: count }, (_, offset) => startIndex + offset).filter((index) => index < times.length);
 }
 
+function buildGridLayouts(
+  widgets: WidgetLayout[],
+  savedLayouts: DashboardSettings["standardConfig"]["gridLayout"] = {}
+): GridLayouts {
+  return Object.fromEntries(
+    Object.entries(GRID_BREAKPOINT_COLUMNS).map(([breakpoint, columns]) => [
+      breakpoint,
+      buildGridLayout(widgets, savedLayouts?.[breakpoint as GridBreakpoint] ?? savedLayouts?.lg, columns)
+    ])
+  );
+}
+
 function buildGridLayout(
   widgets: WidgetLayout[],
-  savedLayout: NonNullable<DashboardSettings["standardConfig"]["gridLayout"]> = {}
+  savedLayout: NonNullable<DashboardSettings["standardConfig"]["gridLayout"]>[GridBreakpoint] = {},
+  columns = GRID_COLUMNS
 ) {
   let cursorX = 0;
   let cursorY = 0;
@@ -1626,10 +1641,10 @@ function buildGridLayout(
       const height = saved?.h ?? size.h;
 
       if (saved) {
-        const width = Math.min(Math.max(1, saved.w), GRID_COLUMNS);
+        const width = Math.min(Math.max(1, saved.w), columns);
         return {
           i: widget.id,
-          x: Math.min(Math.max(0, saved.x), GRID_COLUMNS - width),
+          x: Math.min(Math.max(0, saved.x), columns - width),
           y: Math.max(0, saved.y),
           w: width,
           h: height,
@@ -1637,7 +1652,8 @@ function buildGridLayout(
         };
       }
 
-      if (cursorX + size.w > GRID_COLUMNS) {
+      const width = Math.min(size.w, columns);
+      if (cursorX + width > columns) {
         cursorX = 0;
         cursorY += rowHeight;
         rowHeight = 0;
@@ -1647,14 +1663,35 @@ function buildGridLayout(
         i: widget.id,
         x: cursorX,
         y: cursorY,
-        w: size.w,
+        w: width,
         h: height,
         minH: GRID_ITEM_MIN_HEIGHT
       };
-      cursorX += size.w;
+      cursorX += width;
       rowHeight = Math.max(rowHeight, height);
       return item;
     });
+}
+
+function gridLayoutsToStorage(layouts: GridLayouts): NonNullable<DashboardSettings["standardConfig"]["gridLayout"]> {
+  return Object.fromEntries(
+    Object.entries(layouts)
+      .filter(([breakpoint, layout]) => isGridBreakpoint(breakpoint) && Array.isArray(layout))
+      .map(([breakpoint, layout]) => [
+        breakpoint,
+        Object.fromEntries(
+          (layout ?? []).map((item) => [
+            item.i as WidgetId,
+            {
+              x: item.x,
+              y: item.y,
+              w: item.w,
+              h: item.h
+            }
+          ])
+        )
+      ])
+  );
 }
 
 function getWidgetPresentation(columns: number, rows: number): WidgetPresentation {
@@ -1667,6 +1704,10 @@ function hasLayoutForWidgets(layout: Layout, widgets: WidgetLayout[]) {
   if (layout.length === 0) return false;
   const layoutIds = new Set(layout.map((item) => item.i));
   return widgets.every((widget) => layoutIds.has(widget.id));
+}
+
+function isGridBreakpoint(value: string): value is GridBreakpoint {
+  return value in GRID_BREAKPOINT_COLUMNS;
 }
 
 function getDefaultGridSize(widget: WidgetLayout) {

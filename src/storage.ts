@@ -1,4 +1,14 @@
-import type { DashboardSettings, ThemeMode, WidgetId, WidgetLayout, ModeConfiguration, ModeType } from "./types";
+import type {
+  DashboardSettings,
+  GridBreakpoint,
+  GridBreakpointLayouts,
+  GridWidgetLayout,
+  ThemeMode,
+  WidgetId,
+  WidgetLayout,
+  ModeConfiguration,
+  ModeType
+} from "./types";
 
 const STORAGE_KEY = "plz-grid-dashboard:v2";
 const WIDGET_PANEL_STATE_KEY = "plz-grid-dashboard:widget-panel:v1";
@@ -48,6 +58,7 @@ export const DEFAULT_HUNTING_CONFIG: ModeConfiguration = {
 const widgetIds = new Set<WidgetId>(
   DEFAULT_STANDARD_CONFIG.widgets.map((widget) => widget.id)
 );
+const gridBreakpoints: GridBreakpoint[] = ["lg", "md", "sm", "xs", "xxs"];
 const themeModes = new Set<ThemeMode>(["system", "standard", "dark"]);
 const DEFAULT_THEME: ThemeMode = "system";
 
@@ -236,14 +247,48 @@ function normalizeHuntingConfig(config: ModeConfiguration | undefined): ModeConf
   };
 }
 
-function normalizeGridLayout(config: ModeConfiguration["gridLayout"]) {
+function normalizeGridLayout(config: unknown): ModeConfiguration["gridLayout"] {
   if (!config || typeof config !== "object") return {};
 
-  const layout: ModeConfiguration["gridLayout"] = {};
+  const entries = Object.entries(config);
+  const hasBreakpointKeys = entries.some(([key]) => gridBreakpoints.includes(key as GridBreakpoint));
+
+  if (!hasBreakpointKeys) {
+    const legacyLayout = normalizeGridBreakpointLayout(config);
+    return Object.keys(legacyLayout).length > 0 ? { lg: legacyLayout } : {};
+  }
+
+  const layouts: ModeConfiguration["gridLayout"] = {};
+  for (const breakpoint of gridBreakpoints) {
+    const breakpointLayout = normalizeGridBreakpointLayout((config as Record<string, unknown>)[breakpoint]);
+    if (Object.keys(breakpointLayout).length > 0) {
+      layouts[breakpoint] = breakpointLayout;
+    }
+  }
+  return layouts;
+}
+
+function normalizeGridBreakpointLayout(config: unknown): GridBreakpointLayouts {
+  if (!config || typeof config !== "object") return {};
+
+  const layout: GridBreakpointLayouts = {};
   for (const [id, item] of Object.entries(config)) {
-    if (!widgetIds.has(id as WidgetId) || !item) continue;
-    if (!Number.isFinite(item.x) || !Number.isFinite(item.y) || !Number.isFinite(item.w) || !Number.isFinite(item.h)) continue;
-    layout[id as WidgetId] = item;
+    if (!widgetIds.has(id as WidgetId) || !item || typeof item !== "object") continue;
+    const candidate = item as Partial<GridWidgetLayout>;
+    if (
+      !Number.isFinite(candidate.x) ||
+      !Number.isFinite(candidate.y) ||
+      !Number.isFinite(candidate.w) ||
+      !Number.isFinite(candidate.h)
+    ) {
+      continue;
+    }
+    layout[id as WidgetId] = {
+      x: candidate.x,
+      y: candidate.y,
+      w: candidate.w,
+      h: candidate.h
+    } as GridWidgetLayout;
   }
   return layout;
 }

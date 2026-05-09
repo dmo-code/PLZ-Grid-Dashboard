@@ -18,6 +18,7 @@ export type WidgetId =
 export type WidgetSize = "mini" | "compact" | "wide" | "tall" | "large" | "full";
 export type ThemeMode = "system" | "standard" | "dark";
 export type ModeType = "standard" | "hunting";
+export type GridBreakpoint = "lg" | "md" | "sm" | "xs" | "xxs";
 
 export type WidgetLayout = {
   id: WidgetId;
@@ -32,10 +33,12 @@ export type GridWidgetLayout = {
   h: number;
 };
 
+export type GridBreakpointLayouts = Partial<Record<WidgetId, GridWidgetLayout>>;
+
 export type ModeConfiguration = {
   widgets: WidgetLayout[];
   customHeight: Record<string, number>;
-  gridLayout?: Partial<Record<WidgetId, GridWidgetLayout>>;
+  gridLayout?: Partial<Record<GridBreakpoint, GridBreakpointLayouts>>;
 };
 
 export type DashboardSettings = {
