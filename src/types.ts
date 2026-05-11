@@ -13,7 +13,8 @@ export type WidgetId =
   | "roofRain"
   | "moon"
   | "wind"
-  | "humidity";
+  | "humidity"
+  | "pressure";
 
 export type WidgetSize = "mini" | "compact" | "wide" | "tall" | "large" | "full";
 export type ThemeMode = "system" | "standard" | "dark";
@@ -79,6 +80,8 @@ export type WeatherData = {
     windSpeed: number | null;
     windDirection: number | null;
     windGusts: number | null;
+    pressureMsl: number | null;
+    surfacePressure: number | null;
   };
   hourly: {
     time: string[];
@@ -89,6 +92,8 @@ export type WeatherData = {
     windSpeed: Array<number | null>;
     windDirection: Array<number | null>;
     windGusts: Array<number | null>;
+    pressureMsl: Array<number | null>;
+    surfacePressure: Array<number | null>;
   };
   daily: {
     time: string[];

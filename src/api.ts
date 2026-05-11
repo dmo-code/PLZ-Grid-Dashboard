@@ -325,7 +325,9 @@ async function getWeather(location: LocationInfo): Promise<WeatherData> {
       "weather_code",
       "wind_speed_10m",
       "wind_direction_10m",
-      "wind_gusts_10m"
+      "wind_gusts_10m",
+      "pressure_msl",
+      "surface_pressure"
     ].join(","),
     hourly: [
       "temperature_2m",
@@ -334,7 +336,9 @@ async function getWeather(location: LocationInfo): Promise<WeatherData> {
       "weather_code",
       "wind_speed_10m",
       "wind_direction_10m",
-      "wind_gusts_10m"
+      "wind_gusts_10m",
+      "pressure_msl",
+      "surface_pressure"
     ].join(","),
     daily: [
       "sunrise",
@@ -366,7 +370,9 @@ async function getWeather(location: LocationInfo): Promise<WeatherData> {
       weatherCode: numberOrNull(data.current?.weather_code),
       windSpeed: numberOrNull(data.current?.wind_speed_10m),
       windDirection: numberOrNull(data.current?.wind_direction_10m),
-      windGusts: numberOrNull(data.current?.wind_gusts_10m)
+      windGusts: numberOrNull(data.current?.wind_gusts_10m),
+      pressureMsl: numberOrNull(data.current?.pressure_msl),
+      surfacePressure: numberOrNull(data.current?.surface_pressure)
     },
     hourly: {
       time: data.hourly?.time ?? [],
@@ -376,7 +382,9 @@ async function getWeather(location: LocationInfo): Promise<WeatherData> {
       weatherCode: data.hourly?.weather_code ?? [],
       windSpeed: data.hourly?.wind_speed_10m ?? [],
       windDirection: data.hourly?.wind_direction_10m ?? [],
-      windGusts: data.hourly?.wind_gusts_10m ?? []
+      windGusts: data.hourly?.wind_gusts_10m ?? [],
+      pressureMsl: data.hourly?.pressure_msl ?? [],
+      surfacePressure: data.hourly?.surface_pressure ?? []
     },
     daily: {
       time: data.daily?.time ?? [],

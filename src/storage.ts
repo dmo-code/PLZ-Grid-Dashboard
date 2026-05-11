@@ -32,7 +32,8 @@ export const DEFAULT_STANDARD_CONFIG: ModeConfiguration = {
     { id: "water", enabled: true, size: "mini" },
     { id: "roofRain", enabled: true, size: "compact" },
     { id: "wind", enabled: false, size: "compact" },
-    { id: "humidity", enabled: false, size: "compact" }
+    { id: "humidity", enabled: false, size: "compact" },
+    { id: "pressure", enabled: true, size: "compact" }
   ],
   customHeight: {},
   gridLayout: {}
@@ -49,7 +50,8 @@ export const DEFAULT_HUNTING_CONFIG: ModeConfiguration = {
     { id: "sun", enabled: true, size: "mini" },
     { id: "moon", enabled: true, size: "mini" },
     { id: "wind", enabled: false, size: "compact" },
-    { id: "humidity", enabled: false, size: "compact" }
+    { id: "humidity", enabled: false, size: "compact" },
+    { id: "pressure", enabled: true, size: "compact" }
   ],
   customHeight: {},
   gridLayout: {}

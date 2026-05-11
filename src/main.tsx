@@ -56,7 +56,8 @@ const widgetMeta: Record<WidgetId, { title: string; accent: string }> = {
   water: { title: "Pegel", accent: "water" },
   roofRain: { title: "Dachregen", accent: "water" },
   wind: { title: "Wind", accent: "sky" },
-  humidity: { title: "Luftfeuchte", accent: "water" }
+  humidity: { title: "Luftfeuchte", accent: "water" },
+  pressure: { title: "Luftdruck", accent: "violet" }
 };
 
 const defaultGridSizeByWidget: Record<WidgetId, { w: number; h: number }> = {
@@ -74,7 +75,8 @@ const defaultGridSizeByWidget: Record<WidgetId, { w: number; h: number }> = {
   water: { w: 5, h: 18 },
   roofRain: { w: 5, h: 15 },
   wind: { w: 4, h: 16 },
-  humidity: { w: 3, h: 7 }
+  humidity: { w: 3, h: 7 },
+  pressure: { w: 4, h: 11 }
 };
 
 const weatherLabels = new Map<number, string>([
@@ -102,10 +104,10 @@ const weatherLabels = new Map<number, string>([
 const widgetCategories = [
   { id: "context", title: "Standort & Kontext", ids: ["place"] as WidgetId[] },
   { id: "weather", title: "Wetter", ids: ["weather", "forecast", "dwdWeather", "warnings"] as WidgetId[] },
-  { id: "air", title: "Luft & Umwelt", ids: ["pollen", "dwdPollen", "air", "ubaAir", "humidity"] as WidgetId[] },
+  { id: "air", title: "Luft & Umwelt", ids: ["pollen", "dwdPollen", "air", "ubaAir", "humidity", "pressure"] as WidgetId[] },
   { id: "sunMoon", title: "Sonne & Mond", ids: ["sun", "moon"] as WidgetId[] },
   { id: "waterEnergy", title: "Wasser", ids: ["water", "roofRain"] as WidgetId[] },
-  { id: "hunt", title: "Jagd", ids: ["moon", "weather", "forecast", "sun", "warnings", "air", "pollen", "wind", "humidity"] as WidgetId[] }
+  { id: "hunt", title: "Jagd", ids: ["moon", "weather", "forecast", "sun", "warnings", "air", "pollen", "wind", "humidity", "pressure"] as WidgetId[] }
 ];
 
 function App() {
@@ -831,6 +833,8 @@ function renderWidget(id: WidgetId, data: DashboardData, presentation: WidgetPre
       return <RoofRainWidget data={data} presentation={presentation} />;
     case "wind":
       return <WindWidget data={data} />;
+    case "pressure":
+      return <PressureWidget data={data} presentation={presentation} />;
     case "humidity": {
       const humidity = data.weather.current.humidity;
       if (humidity === null) return <p className="empty">Keine Daten</p>;
@@ -847,6 +851,56 @@ function renderWidget(id: WidgetId, data: DashboardData, presentation: WidgetPre
       );
     }
   }
+}
+
+function PressureWidget({ data, presentation }: { data: DashboardData; presentation: WidgetPresentation }) {
+  const [timeframeHours, setTimeframeHours] = useState<24 | 48 | 72>(24);
+  const weather = data.weather;
+  const pressure = weather.current.pressureMsl;
+  const localPressure = weather.current.surfacePressure;
+  if (pressure === null) return <p className="empty">Keine Luftdruckdaten verfügbar.</p>;
+
+  const forecastRange = getUpcomingHourlyRange(weather.current.time, weather.hourly.time, weather.hourly.pressureMsl, timeframeHours);
+  const nextPressure = forecastRange.values[1] ?? forecastRange.values[0] ?? null;
+  const change3h = getHourlyChange(weather.current.time, weather.hourly.time, weather.hourly.pressureMsl, 3);
+  const timeframeMaxPressure = maxValue(forecastRange.values);
+  const showDetails = presentation.rows >= 8;
+  const showControls = presentation.rows >= 10;
+  const showChart = presentation.rows >= 11;
+
+  return (
+    <div className={`pressure-widget ${showChart ? "has-chart" : ""}`}>
+      <div className="pressure-gauge" aria-hidden="true">
+        <span style={{ "--pressure-rotation": `${getPressureGaugeRotation(pressure)}deg` } as React.CSSProperties} />
+      </div>
+      <div className="hero-metric pressure-hero">
+        <strong>{formatNumber(pressure, " hPa")}</strong>
+        <span>{pressureLabel(pressure)} · Trend {formatSignedPressure(change3h)}</span>
+      </div>
+      {showDetails ? (
+        <div className="metric-row">
+          <Metric label="Lokal" value={formatNumber(localPressure, " hPa")} />
+          <Metric label="Nächste Std." value={formatNumber(nextPressure, " hPa")} />
+          <Metric label={`Max ${timeframeHours}h`} value={formatNumber(timeframeMaxPressure, " hPa")} />
+        </div>
+      ) : null}
+      {showControls ? (
+        <div className="segmented-control pressure-timeframe-control" aria-label="Luftdruck-Zeitraum" onPointerDown={(event) => event.stopPropagation()}>
+          {[24, 48, 72].map((hours) => (
+            <button
+              key={hours}
+              type="button"
+              className={timeframeHours === hours ? "active" : ""}
+              onClick={() => setTimeframeHours(hours as 24 | 48 | 72)}
+            >
+              {hours}h
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {showChart ? <PressureTrendChart times={forecastRange.times} values={forecastRange.values} timeframeHours={timeframeHours} /> : null}
+    </div>
+  );
 }
 
 function WindWidget({ data }: { data: DashboardData }) {
@@ -1474,6 +1528,68 @@ function WeatherTrendChart({
   );
 }
 
+function PressureTrendChart({ times, values, timeframeHours }: { times: string[]; values: Array<number | null>; timeframeHours: 24 | 48 | 72 }) {
+  const pressureValues = values.filter((value): value is number => value !== null);
+  if (times.length === 0 || pressureValues.length < 2) return null;
+
+  const min = Math.min(...pressureValues);
+  const max = Math.max(...pressureValues);
+  const chartMin = min === max ? min - 1 : min;
+  const chartMax = min === max ? max + 1 : max;
+  const points = values
+    .map((value, index) => {
+      if (value === null) return null;
+      const x = scale(index, 0, Math.max(values.length - 1, 1), 10, 290);
+      const y = scale(value, chartMin, chartMax, 90, 18);
+      return { x, y, value, label: times[index] };
+    })
+    .filter((point): point is ChartPoint => point !== null);
+  const latestPoint = points.at(-1);
+  const linePath = buildLinePath(points);
+  const areaPath = buildAreaPath(points, 96);
+  const nowMarkerX = getCurrentTimeMarkerX(times);
+
+  return (
+    <div className="chart-card">
+      <div className="chart-heading">
+        <strong>{timeframeHours}h Luftdruck</strong>
+        <span>
+          {Math.round(min)}-{Math.round(max)} hPa
+        </span>
+      </div>
+      <svg className="line-chart pressure-chart" viewBox="0 0 300 124" role="img" aria-label="Luftdruckverlauf für 24 Stunden">
+        <defs>
+          <linearGradient id="pressure-fill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#7967a8" stopOpacity="0.34" />
+            <stop offset="100%" stopColor="#7967a8" stopOpacity="0.04" />
+          </linearGradient>
+        </defs>
+        {[24, 52, 80].map((y) => (
+          <line key={y} className="chart-grid" x1="10" x2="290" y1={y} y2={y} />
+        ))}
+        <path className="chart-area pressure-area" d={areaPath} />
+        {nowMarkerX !== null ? (
+          <g className="now-marker">
+            <line x1={nowMarkerX} x2={nowMarkerX} y1="18" y2="100" />
+            <circle cx={nowMarkerX} cy="18" r="3.5" />
+            <text x={nowMarkerX} y="12" textAnchor="middle">
+              Jetzt
+            </text>
+          </g>
+        ) : null}
+        <path className="chart-line pressure-line" d={linePath} />
+        {latestPoint ? <circle className="chart-dot pressure-dot" cx={latestPoint.x} cy={latestPoint.y} r="4.8" /> : null}
+        <text className="chart-axis" x="10" y="116">
+          {formatHour(times[0])}
+        </text>
+        <text className="chart-axis" x="290" y="116" textAnchor="end">
+          {formatHour(times[times.length - 1])}
+        </text>
+      </svg>
+    </div>
+  );
+}
+
 function PollenTrendChart({
   pollen
 }: {
@@ -1744,6 +1860,20 @@ function maxToday(times: string[], values: Array<number | null>) {
   return todaysValues.length ? Math.max(...todaysValues) : null;
 }
 
+function maxValue(values: Array<number | null>) {
+  const numericValues = values.filter((value): value is number => value !== null);
+  return numericValues.length ? Math.max(...numericValues) : null;
+}
+
+function getUpcomingHourlyRange(currentTime: string, times: string[], values: Array<number | null>, hours: number) {
+  const currentIndex = times.findIndex((time) => time >= currentTime);
+  const startIndex = currentIndex >= 0 ? currentIndex : 0;
+  return {
+    times: times.slice(startIndex, startIndex + hours),
+    values: values.slice(startIndex, startIndex + hours)
+  };
+}
+
 function getNextPrecipitation(currentTime: string, times: string[], values: Array<number | null>, hours: number) {
   const currentIndex = times.findIndex((time) => time >= currentTime);
   const startIndex = currentIndex >= 0 ? currentIndex : 0;
@@ -1756,6 +1886,15 @@ function getNextHourlyValue(currentTime: string, times: string[], values: Array<
   const currentIndex = times.findIndex((time) => time >= currentTime);
   const startIndex = currentIndex >= 0 ? currentIndex : 0;
   return values.slice(startIndex, startIndex + 4).find((value) => value !== null) ?? null;
+}
+
+function getHourlyChange(currentTime: string, times: string[], values: Array<number | null>, hours: number) {
+  const currentIndex = times.findIndex((time) => time >= currentTime);
+  const startIndex = currentIndex >= 0 ? currentIndex : 0;
+  const current = values[startIndex] ?? null;
+  const future = values[startIndex + hours] ?? null;
+  if (current === null || future === null) return null;
+  return future - current;
 }
 
 function getWindTrend(currentTime: string, times: string[], values: Array<number | null>) {
@@ -1810,6 +1949,23 @@ function getBeaufort(speedKmh: number) {
   ];
   const value = scale.findIndex((item) => speedKmh <= item.max);
   return { value, label: scale[value].label };
+}
+
+function getPressureGaugeRotation(value: number) {
+  return scale(Math.min(1045, Math.max(970, value)), 970, 1045, -115, 115);
+}
+
+function pressureLabel(value: number) {
+  if (value < 1000) return "tief";
+  if (value > 1025) return "hoch";
+  return "normal";
+}
+
+function formatSignedPressure(value: number | null) {
+  if (value === null) return "n/a";
+  const rounded = Math.round(value);
+  if (rounded === 0) return "stabil";
+  return `${rounded > 0 ? "+" : ""}${rounded} hPa/3h`;
 }
 
 function formatNumber(value: number | null | undefined, unit: string) {
