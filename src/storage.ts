@@ -7,10 +7,11 @@ import type {
   WidgetId,
   WidgetLayout,
   ModeConfiguration,
-  ModeType
+  DashboardMode
 } from "./types";
 
-const STORAGE_KEY = "plz-grid-dashboard:v2";
+const STORAGE_KEY = "plz-grid-dashboard:v3";
+const LEGACY_STORAGE_KEY = "plz-grid-dashboard:v2";
 const WIDGET_PANEL_STATE_KEY = "plz-grid-dashboard:widget-panel:v1";
 const HELP_SEEN_KEY = "plz-grid-dashboard:help-seen:v1";
 const ROOF_RAIN_SETTINGS_KEY = "plz-grid-dashboard:roof-rain:v1";
@@ -44,11 +45,17 @@ export const DEFAULT_HUNTING_CONFIG: ModeConfiguration = {
   widgets: [
     { id: "weather", enabled: true, size: "mini" },
     { id: "forecast", enabled: true, size: "wide" },
+    { id: "place", enabled: false, size: "mini" },
+    { id: "dwdWeather", enabled: false, size: "mini" },
     { id: "pollen", enabled: true, size: "mini" },
+    { id: "dwdPollen", enabled: false, size: "mini" },
     { id: "air", enabled: true, size: "mini" },
+    { id: "ubaAir", enabled: false, size: "mini" },
     { id: "warnings", enabled: true, size: "mini" },
     { id: "sun", enabled: true, size: "mini" },
     { id: "moon", enabled: true, size: "mini" },
+    { id: "water", enabled: false, size: "mini" },
+    { id: "roofRain", enabled: false, size: "compact" },
     { id: "wind", enabled: false, size: "compact" },
     { id: "humidity", enabled: false, size: "compact" },
     { id: "pressure", enabled: true, size: "compact" }
@@ -56,6 +63,19 @@ export const DEFAULT_HUNTING_CONFIG: ModeConfiguration = {
   customHeight: {},
   gridLayout: {}
 };
+
+const DEFAULT_MODE_COLORS = {
+  standard: "#2b7058",
+  hunting: "#8b4513",
+  angler: "#2f89b8",
+  custom: "#5f6fca"
+};
+
+const DEFAULT_MODES: DashboardMode[] = [
+  { id: "standard", name: "Standard", color: DEFAULT_MODE_COLORS.standard, config: DEFAULT_STANDARD_CONFIG },
+  { id: "hunting", name: "Jagd", color: DEFAULT_MODE_COLORS.hunting, config: DEFAULT_HUNTING_CONFIG },
+  { id: "angler", name: "Angler", color: DEFAULT_MODE_COLORS.angler, config: DEFAULT_STANDARD_CONFIG }
+];
 
 const widgetIds = new Set<WidgetId>(
   DEFAULT_STANDARD_CONFIG.widgets.map((widget) => widget.id)
@@ -66,61 +86,63 @@ const DEFAULT_THEME: ThemeMode = "system";
 
 export function loadSettings(): DashboardSettings {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const raw = window.localStorage.getItem(STORAGE_KEY) ?? window.localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!raw) {
       return {
         postalCode: "10115",
         theme: DEFAULT_THEME,
-        currentMode: "standard",
-        standardConfig: DEFAULT_STANDARD_CONFIG,
-        huntingConfig: DEFAULT_HUNTING_CONFIG
+        currentModeId: "standard",
+        modes: cloneDefaultModes()
       };
     }
 
-    const parsed = JSON.parse(raw) as Partial<DashboardSettings>;
+    const parsed = JSON.parse(raw) as Partial<DashboardSettings> & Record<string, unknown>;
 
     // Migration from old format (v1 with widgets[] and huntMode)
     if (Array.isArray((parsed as any).widgets) && !parsed.standardConfig) {
       const oldWidgets = (parsed as any).widgets as WidgetLayout[];
+      const standardConfig = {
+        widgets: oldWidgets
+          .filter((widget) => widgetIds.has(widget.id))
+          .map((widget) => ({
+            id: widget.id,
+            enabled: widget.enabled,
+            size: ["mini", "compact", "wide", "tall", "large", "full"].includes(widget.size)
+              ? widget.size
+              : "compact"
+          })),
+        customHeight: {},
+        gridLayout: {}
+      };
       return {
         postalCode: typeof parsed.postalCode === "string" ? parsed.postalCode : "10115",
         theme: themeModes.has(parsed.theme as ThemeMode) ? (parsed.theme as ThemeMode) : DEFAULT_THEME,
-        currentMode: (parsed as any).huntMode ? "hunting" : "standard",
-        standardConfig: {
-          widgets: oldWidgets
-            .filter((widget) => widgetIds.has(widget.id))
-            .map((widget) => ({
-              id: widget.id,
-              enabled: widget.enabled,
-              size: ["mini", "compact", "wide", "tall", "large", "full"].includes(widget.size)
-                ? widget.size
-                : "compact"
-            })),
-          customHeight: {}
-        },
-        huntingConfig: DEFAULT_HUNTING_CONFIG
+        currentModeId: (parsed as any).huntMode ? "hunting" : "standard",
+        modes: buildDefaultModes(standardConfig, DEFAULT_HUNTING_CONFIG)
       };
     }
 
-    // Load new format (v2)
-    const standardConfig = normalizeConfig(parsed.standardConfig, DEFAULT_STANDARD_CONFIG);
-    const huntingConfig = normalizeHuntingConfig(parsed.huntingConfig);
-    const currentMode = (parsed.currentMode === "hunting" ? "hunting" : "standard") as ModeType;
+    if (Array.isArray(parsed.modes)) {
+      return normalizeSettings(parsed);
+    }
+
+    // Migration from v2 fixed standard/hunting format.
+    const standardConfig = normalizeConfig(parsed.standardConfig as ModeConfiguration | undefined, DEFAULT_STANDARD_CONFIG);
+    const huntingConfig = normalizeHuntingConfig(parsed.huntingConfig as ModeConfiguration | undefined);
+    const currentModeId = parsed.currentMode === "hunting" ? "hunting" : "standard";
 
     return {
       postalCode: typeof parsed.postalCode === "string" ? parsed.postalCode : "10115",
       theme: themeModes.has(parsed.theme as ThemeMode) ? (parsed.theme as ThemeMode) : DEFAULT_THEME,
-      currentMode,
-      standardConfig,
-      huntingConfig
+      currentModeId,
+      modes: buildDefaultModes(standardConfig, huntingConfig)
     };
   } catch {
     return {
       postalCode: "10115",
       theme: DEFAULT_THEME,
-      currentMode: "standard",
-      standardConfig: DEFAULT_STANDARD_CONFIG,
-      huntingConfig: DEFAULT_HUNTING_CONFIG
+      currentModeId: "standard",
+      modes: cloneDefaultModes()
     };
   }
 }
@@ -151,7 +173,7 @@ export function saveWidgetPanelState(collapsedCategories: Record<string, boolean
 
 export function shouldOpenHelpOnStart() {
   try {
-    return !window.localStorage.getItem(STORAGE_KEY) && window.localStorage.getItem(HELP_SEEN_KEY) !== "true";
+    return !window.localStorage.getItem(STORAGE_KEY) && !window.localStorage.getItem(LEGACY_STORAGE_KEY) && window.localStorage.getItem(HELP_SEEN_KEY) !== "true";
   } catch {
     return true;
   }
@@ -199,15 +221,18 @@ export function saveRoofRainSettings(settings: RoofRainSettings) {
 }
 
 function normalizeConfig(config: ModeConfiguration | undefined, defaults: ModeConfiguration): ModeConfiguration {
-  if (!config || !Array.isArray(config.widgets)) return defaults;
+  if (!config || !Array.isArray(config.widgets)) return cloneConfig(defaults);
 
   const configuredIds = new Set(config.widgets.map((widget) => widget.id));
   const widgets = [
     ...config.widgets.filter((widget) => widgetIds.has(widget.id)),
-    ...defaults.widgets.filter((widget) => !configuredIds.has(widget.id))
+    ...defaults.widgets.filter((widget) => !configuredIds.has(widget.id)),
+    ...DEFAULT_STANDARD_CONFIG.widgets
+      .filter((widget) => !configuredIds.has(widget.id) && !defaults.widgets.some((defaultWidget) => defaultWidget.id === widget.id))
+      .map((widget) => ({ ...widget, enabled: false }))
   ].map((widget) => ({
     id: widget.id,
-    enabled: widget.enabled,
+    enabled: typeof widget.enabled === "boolean" ? widget.enabled : false,
     size: ["mini", "compact", "wide", "tall", "large", "full"].includes(widget.size) ? widget.size : "compact"
   }));
 
@@ -218,8 +243,118 @@ function normalizeConfig(config: ModeConfiguration | undefined, defaults: ModeCo
   };
 }
 
+export function createEmptyModeConfig(): ModeConfiguration {
+  return {
+    widgets: DEFAULT_STANDARD_CONFIG.widgets.map((widget) => ({
+      ...widget,
+      enabled: false
+    })),
+    customHeight: {},
+    gridLayout: {}
+  };
+}
+
+function buildDefaultModes(standardConfig: ModeConfiguration, huntingConfig: ModeConfiguration): DashboardMode[] {
+  const normalizedStandardConfig = normalizeConfig(standardConfig, DEFAULT_STANDARD_CONFIG);
+  const normalizedHuntingConfig = normalizeConfig(huntingConfig, DEFAULT_HUNTING_CONFIG);
+  return [
+    { id: "standard", name: "Standard", color: DEFAULT_MODE_COLORS.standard, config: normalizedStandardConfig },
+    { id: "hunting", name: "Jagd", color: DEFAULT_MODE_COLORS.hunting, config: normalizedHuntingConfig },
+    { id: "angler", name: "Angler", color: DEFAULT_MODE_COLORS.angler, config: cloneConfig(normalizedStandardConfig) }
+  ];
+}
+
+function cloneDefaultModes(): DashboardMode[] {
+  return DEFAULT_MODES.map((mode) => ({
+    ...mode,
+    config: cloneConfig(mode.config)
+  }));
+}
+
+function cloneConfig(config: ModeConfiguration): ModeConfiguration {
+  return {
+    widgets: config.widgets.map((widget) => ({ ...widget })),
+    customHeight: { ...config.customHeight },
+    gridLayout: config.gridLayout ? JSON.parse(JSON.stringify(config.gridLayout)) as ModeConfiguration["gridLayout"] : {}
+  };
+}
+
+function normalizeSettings(settings: Partial<DashboardSettings> & Record<string, unknown>): DashboardSettings {
+  const modes = normalizeModes(settings.modes);
+  const currentModeId =
+    typeof settings.currentModeId === "string" && modes.some((mode) => mode.id === settings.currentModeId)
+      ? settings.currentModeId
+      : modes[0].id;
+
+  return {
+    postalCode: typeof settings.postalCode === "string" ? settings.postalCode : "10115",
+    theme: themeModes.has(settings.theme as ThemeMode) ? (settings.theme as ThemeMode) : DEFAULT_THEME,
+    currentModeId,
+    modes
+  };
+}
+
+function normalizeModes(value: unknown): DashboardMode[] {
+  const rawModes = Array.isArray(value) ? value : [];
+  const usedIds = new Set<string>();
+  const normalized = rawModes
+    .map((mode, index) => normalizeMode(mode, index))
+    .filter((mode): mode is DashboardMode => mode !== null)
+    .map((mode) => {
+      const id = createUniqueModeId(mode.id, usedIds);
+      usedIds.add(id);
+      return { ...mode, id };
+    });
+
+  return normalized.length > 0 ? normalized : cloneDefaultModes();
+}
+
+function normalizeMode(value: unknown, index: number): DashboardMode | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<DashboardMode>;
+  const id = normalizeModeId(candidate.id, index);
+  const fallbackConfig = id === "hunting" ? DEFAULT_HUNTING_CONFIG : DEFAULT_STANDARD_CONFIG;
+  return {
+    id,
+    name: normalizeModeName(candidate.name, id),
+    color: normalizeColor(candidate.color, DEFAULT_MODE_COLORS[id as keyof typeof DEFAULT_MODE_COLORS] ?? DEFAULT_MODE_COLORS.custom),
+    config: normalizeConfig(candidate.config, fallbackConfig)
+  };
+}
+
+function normalizeModeId(value: unknown, index: number) {
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
+    if (normalized) return normalized;
+  }
+  return `mode-${index + 1}`;
+}
+
+function createUniqueModeId(id: string, usedIds: Set<string>) {
+  if (!usedIds.has(id)) return id;
+  let index = 2;
+  let nextId = `${id}-${index}`;
+  while (usedIds.has(nextId)) {
+    index += 1;
+    nextId = `${id}-${index}`;
+  }
+  return nextId;
+}
+
+function normalizeModeName(value: unknown, id: string) {
+  if (typeof value === "string" && value.trim()) return value.trim().slice(0, 32);
+  if (id === "standard") return "Standard";
+  if (id === "hunting") return "Jagd";
+  if (id === "angler") return "Angler";
+  return "Neuer Modus";
+}
+
+function normalizeColor(value: unknown, fallback: string) {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
+}
+
 function normalizeHuntingConfig(config: ModeConfiguration | undefined): ModeConfiguration {
-  if (!config || !Array.isArray(config.widgets)) return DEFAULT_HUNTING_CONFIG;
+  if (!config || !Array.isArray(config.widgets)) return cloneConfig(DEFAULT_HUNTING_CONFIG);
 
   const widgetIdsInConfig = config.widgets.map((widget) => widget.id);
   const hasOldWindHumidityDefault =
@@ -227,26 +362,9 @@ function normalizeHuntingConfig(config: ModeConfiguration | undefined): ModeConf
     widgetIdsInConfig.includes("wind") &&
     widgetIdsInConfig.includes("humidity");
 
-  if (hasOldWindHumidityDefault) return DEFAULT_HUNTING_CONFIG;
+  if (hasOldWindHumidityDefault) return cloneConfig(DEFAULT_HUNTING_CONFIG);
 
-  const configuredById = new Map(config.widgets.map((widget) => [widget.id, widget]));
-  const widgets = DEFAULT_HUNTING_CONFIG.widgets.map((defaultWidget) => {
-    const configuredWidget = configuredById.get(defaultWidget.id);
-    return {
-      id: defaultWidget.id,
-      enabled: configuredWidget?.enabled ?? defaultWidget.enabled,
-      size:
-        configuredWidget && ["mini", "compact", "wide", "tall", "large", "full"].includes(configuredWidget.size)
-          ? configuredWidget.size
-          : defaultWidget.size
-    };
-  });
-
-  return {
-    widgets,
-    customHeight: config.customHeight || {},
-    gridLayout: normalizeGridLayout(config.gridLayout)
-  };
+  return normalizeConfig(config, DEFAULT_HUNTING_CONFIG);
 }
 
 function normalizeGridLayout(config: unknown): ModeConfiguration["gridLayout"] {

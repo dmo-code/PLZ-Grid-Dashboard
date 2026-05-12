@@ -244,11 +244,11 @@ button:disabled {
 
 .mode-status-badge {
   min-height: 30px;
-  border: 1px solid rgba(22, 32, 27, 0.12);
+  border: 1px solid color-mix(in srgb, var(--mode-color, var(--button-bg)) 60%, transparent);
   border-radius: 999px;
   padding: 0 12px;
-  background: var(--surface-solid);
-  color: var(--text);
+  background: var(--mode-color, var(--surface-solid));
+  color: white;
   font-size: 0.78rem;
   font-weight: 900;
   text-transform: uppercase;
@@ -257,14 +257,9 @@ button:disabled {
 
 .mode-status-badge:hover,
 .mode-status-badge:focus-visible {
-  background: var(--button-bg);
-  color: var(--button-fg);
-}
-
-.mode-status-badge.hunting {
-  background: linear-gradient(135deg, #8b4513 0%, #a0522d 100%);
+  background: var(--mode-color, var(--button-bg));
   color: white;
-  border-color: rgba(139, 69, 19, 0.42);
+  border-color: color-mix(in srgb, var(--mode-color, var(--button-bg)) 60%, transparent);
 }
 
 .theme-dark .eyebrow,
@@ -766,14 +761,21 @@ h1 {
 .mode-selector-panel {
   display: grid;
   gap: 8px;
-  padding: 12px;
+  padding: 10px;
   border-radius: 8px;
-  background: rgba(139, 69, 19, 0.06);
+  background: rgba(43, 112, 88, 0.06);
   margin-bottom: 12px;
 }
 
 .theme-dark .mode-selector-panel {
-  background: rgba(139, 69, 19, 0.12);
+  background: rgba(130, 168, 146, 0.08);
+}
+
+.mode-selector-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
 }
 
 .mode-selector-label {
@@ -783,39 +785,111 @@ h1 {
   text-transform: uppercase;
 }
 
-.mode-selector-buttons {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+.mode-header-actions {
+  display: flex;
   gap: 6px;
+  align-items: center;
 }
 
-.mode-selector-btn {
-  min-height: 40px;
-  padding: 0 12px;
+.mode-add-btn {
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface-solid);
+  color: var(--text);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.mode-compact-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) 30px 34px 30px;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  min-height: 38px;
+  padding: 5px 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--mode-color, var(--button-bg)) 10%, transparent), transparent 64px),
+    var(--surface-solid);
+  box-shadow: inset 3px 0 0 var(--mode-color, var(--button-bg));
+}
+
+.mode-compact-row select {
+  min-width: 0;
+  width: 100%;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0 26px 0 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 850;
+}
+
+.mode-compact-row select:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--mode-color, var(--button-bg)) 42%, transparent);
+  outline-offset: 1px;
+}
+
+.mode-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--mode-color, var(--button-bg));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mode-color, var(--button-bg)) 14%, transparent);
+}
+
+.mode-color-control {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface-soft);
-  color: var(--text);
-  font-weight: 800;
   cursor: pointer;
-  transition: all 160ms ease;
-  font-size: 0.85rem;
 }
 
-.mode-selector-btn:hover:not(.active) {
-  background: rgba(22, 32, 27, 0.08);
+.mode-color-control input {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
 }
 
-.mode-selector-btn.active {
-  background: var(--button-bg);
-  color: var(--button-fg);
-  border-color: var(--button-bg);
+.mode-icon-btn {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 0.78rem;
+  font-weight: 900;
 }
 
-.mode-selector-btn.hunting.active {
-  background: linear-gradient(135deg, #8b4513 0%, #a0522d 100%);
-  box-shadow: inset 0 0 12px rgba(255, 215, 0, 0.15);
-  border-color: #8b4513;
+.mode-icon-btn:hover,
+.mode-icon-btn:focus-visible,
+.mode-color-control:hover,
+.mode-color-control:focus-within {
+  border-color: var(--border);
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.mode-delete-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
 }
 
 .widget-panel-actions {

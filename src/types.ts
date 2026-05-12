@@ -18,7 +18,7 @@ export type WidgetId =
 
 export type WidgetSize = "mini" | "compact" | "wide" | "tall" | "large" | "full";
 export type ThemeMode = "system" | "standard" | "dark";
-export type ModeType = "standard" | "hunting";
+export type ModeId = string;
 export type GridBreakpoint = "lg" | "md" | "sm" | "xs" | "xxs";
 
 export type WidgetLayout = {
@@ -42,12 +42,18 @@ export type ModeConfiguration = {
   gridLayout?: Partial<Record<GridBreakpoint, GridBreakpointLayouts>>;
 };
 
+export type DashboardMode = {
+  id: ModeId;
+  name: string;
+  color: string;
+  config: ModeConfiguration;
+};
+
 export type DashboardSettings = {
   postalCode: string;
   theme: ThemeMode;
-  currentMode: ModeType;
-  standardConfig: ModeConfiguration;
-  huntingConfig: ModeConfiguration;
+  currentModeId: ModeId;
+  modes: DashboardMode[];
 };
 
 export type LocationInfo = {

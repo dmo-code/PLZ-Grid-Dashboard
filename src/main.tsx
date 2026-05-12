@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Responsive, WidthProvider, type Layout } from "react-grid-layout/legacy";
 import { loadDashboardData, searchLocationChoices, type LocationChoice } from "./api";
 import {
+  createEmptyModeConfig,
   loadRoofRainSettings,
   loadSettings,
   loadWidgetPanelState,
@@ -13,7 +14,7 @@ import {
   shouldOpenHelpOnStart,
   type RoofRainSettings
 } from "./storage";
-import type { DashboardData, DashboardSettings, GridBreakpoint, ThemeMode, WidgetId, WidgetLayout, WidgetSize, ModeType } from "./types";
+import type { DashboardData, DashboardMode, DashboardSettings, GridBreakpoint, GridBreakpointLayouts, ModeConfiguration, ThemeMode, WidgetId, WidgetLayout, WidgetSize } from "./types";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import "./styles.css";
@@ -106,8 +107,7 @@ const widgetCategories = [
   { id: "weather", title: "Wetter", ids: ["weather", "forecast", "dwdWeather", "warnings"] as WidgetId[] },
   { id: "air", title: "Luft & Umwelt", ids: ["pollen", "dwdPollen", "air", "ubaAir", "humidity", "pressure"] as WidgetId[] },
   { id: "sunMoon", title: "Sonne & Mond", ids: ["sun", "moon"] as WidgetId[] },
-  { id: "waterEnergy", title: "Wasser", ids: ["water", "roofRain"] as WidgetId[] },
-  { id: "hunt", title: "Jagd", ids: ["moon", "weather", "forecast", "sun", "warnings", "air", "pollen", "wind", "humidity", "pressure"] as WidgetId[] }
+  { id: "waterEnergy", title: "Wasser", ids: ["water", "roofRain"] as WidgetId[] }
 ];
 
 function App() {
@@ -127,20 +127,71 @@ function App() {
     return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
 
-  // Get current mode config
-  const currentConfig = settings[settings.currentMode === "hunting" ? "huntingConfig" : "standardConfig"];
-  const currentMode = settings.currentMode;
+  const currentMode = (settings.modes.find((mode) => mode.id === settings.currentModeId) ?? settings.modes[0]) as DashboardMode;
+  const currentModeName = currentMode.name.trim() || "Unbenannt";
+  const currentConfig = currentMode.config;
 
   useEffect(() => {
     saveSettings(settings);
   }, [settings]);
 
-  // Mode switching function
-  const switchMode = useCallback((newMode: ModeType) => {
+  const switchMode = useCallback((newModeId: string) => {
     setSettings((current) => ({
       ...current,
-      currentMode: newMode
+      currentModeId: current.modes.some((mode) => mode.id === newModeId) ? newModeId : current.currentModeId
     }));
+  }, []);
+
+  const updateActiveMode = useCallback((updater: (mode: DashboardMode) => DashboardMode) => {
+    setSettings((current) => ({
+      ...current,
+      modes: current.modes.map((mode) => (mode.id === current.currentModeId ? updater(mode) : mode))
+    }));
+  }, []);
+
+  const addMode = useCallback(() => {
+    setSettings((current) => {
+      const id = createModeId(current.modes);
+      const mode: DashboardMode = {
+        id,
+        name: createModeName(current.modes),
+        color: "#5f6fca",
+        config: createEmptyModeConfig()
+      };
+      return {
+        ...current,
+        currentModeId: id,
+        modes: [...current.modes, mode]
+      };
+    });
+  }, []);
+
+  const renameMode = useCallback((modeId: string, name: string) => {
+    setSettings((current) => ({
+      ...current,
+      modes: current.modes.map((mode) => (mode.id === modeId ? { ...mode, name: name.slice(0, 32) } : mode))
+    }));
+  }, []);
+
+  const changeModeColor = useCallback((modeId: string, color: string) => {
+    if (!/^#[0-9a-f]{6}$/i.test(color)) return;
+    setSettings((current) => ({
+      ...current,
+      modes: current.modes.map((mode) => (mode.id === modeId ? { ...mode, color } : mode))
+    }));
+  }, []);
+
+  const deleteMode = useCallback((modeId: string) => {
+    setSettings((current) => {
+      if (current.modes.length <= 1) return current;
+      const modes = current.modes.filter((mode) => mode.id !== modeId);
+      if (modes.length === current.modes.length) return current;
+      return {
+        ...current,
+        currentModeId: current.currentModeId === modeId ? modes[0].id : current.currentModeId,
+        modes
+      };
+    });
   }, []);
 
   const closeHelp = useCallback(() => {
@@ -252,18 +303,17 @@ function App() {
 
   useEffect(() => {
     setActiveGridLayout([]);
-  }, [currentMode]);
+  }, [currentMode.id]);
 
   function updateWidget(id: WidgetId, patch: Partial<WidgetLayout>) {
-    setSettings((current) => {
-      const isHunting = current.currentMode === "hunting";
-      const config = isHunting ? current.huntingConfig : current.standardConfig;
+    updateActiveMode((mode) => {
+      const config = mode.config;
       const nextWidgets = config.widgets.map((widget) =>
         widget.id === id ? { ...widget, ...patch } : widget
       );
       return {
-        ...current,
-        [isHunting ? "huntingConfig" : "standardConfig"]: {
+        ...mode,
+        config: {
           ...config,
           widgets: nextWidgets
         }
@@ -272,12 +322,11 @@ function App() {
   }
 
   function enableAllWidgets() {
-    setSettings((current) => {
-      const isHunting = current.currentMode === "hunting";
-      const config = isHunting ? current.huntingConfig : current.standardConfig;
+    updateActiveMode((mode) => {
+      const config = mode.config;
       return {
-        ...current,
-        [isHunting ? "huntingConfig" : "standardConfig"]: {
+        ...mode,
+        config: {
           ...config,
           widgets: config.widgets.map((widget) => ({ ...widget, enabled: true }))
         }
@@ -287,19 +336,18 @@ function App() {
 
   function moveWidgetTo(id: WidgetId, targetId: WidgetId, position: DropPosition) {
     if (id === targetId) return;
-    setSettings((current) => {
-      const isHunting = current.currentMode === "hunting";
-      const config = isHunting ? current.huntingConfig : current.standardConfig;
+    updateActiveMode((mode) => {
+      const config = mode.config;
       const widgets = [...config.widgets];
       const fromIndex = widgets.findIndex((widget) => widget.id === id);
-      if (fromIndex < 0) return current;
+      if (fromIndex < 0) return mode;
       const [movedWidget] = widgets.splice(fromIndex, 1);
       const targetIndex = widgets.findIndex((widget) => widget.id === targetId);
-      if (targetIndex < 0) return current;
+      if (targetIndex < 0) return mode;
       widgets.splice(position === "after" ? targetIndex + 1 : targetIndex, 0, movedWidget);
       return {
-        ...current,
-        [isHunting ? "huntingConfig" : "standardConfig"]: {
+        ...mode,
+        config: {
           ...config,
           widgets
         }
@@ -308,9 +356,8 @@ function App() {
   }
 
   function saveGridLayouts(layouts: GridLayouts) {
-    setSettings((current) => {
-      const isHunting = current.currentMode === "hunting";
-      const config = isHunting ? current.huntingConfig : current.standardConfig;
+    updateActiveMode((mode) => {
+      const config = mode.config;
       const existingGridLayout = config.gridLayout ?? {};
       const nextGridLayout = gridLayoutsToStorage(layouts);
       const layoutChanged = Object.entries(nextGridLayout).some(([breakpoint, breakpointLayout]) => {
@@ -321,11 +368,11 @@ function App() {
         });
       });
 
-      if (!layoutChanged) return current;
+      if (!layoutChanged) return mode;
 
       return {
-        ...current,
-        [isHunting ? "huntingConfig" : "standardConfig"]: {
+        ...mode,
+        config: {
           ...config,
           gridLayout: {
             ...(config.gridLayout ?? {}),
@@ -347,11 +394,12 @@ function App() {
             {weatherTheme.label}
             <button
               type="button"
-              className={`mode-status-badge ${currentMode === "hunting" ? "hunting" : ""}`}
+              className="mode-status-badge"
+              style={{ "--mode-color": currentMode.color } as React.CSSProperties}
               onClick={() => setSettingsOpen(true)}
-              aria-label={`Widget-Panel öffnen, aktueller Modus: ${currentMode === "hunting" ? "Jagd" : "Standard"}`}
+              aria-label={`Widget-Panel öffnen, aktueller Modus: ${currentModeName}`}
             >
-              {currentMode === "hunting" ? "Jagd" : "Standard"}
+              {currentModeName}
             </button>
           </p>
         </div>
@@ -408,9 +456,14 @@ function App() {
       {settingsOpen && (
         <WidgetSettingsPanel
           widgets={currentConfig.widgets}
+          modes={settings.modes}
           theme={settings.theme}
-          currentMode={currentMode}
+          currentModeId={currentMode.id}
           onModeChange={switchMode}
+          onModeAdd={addMode}
+          onModeRename={renameMode}
+          onModeColorChange={changeModeColor}
+          onModeDelete={deleteMode}
           onClose={() => setSettingsOpen(false)}
           onMoveTo={moveWidgetTo}
           onUpdate={updateWidget}
@@ -579,11 +632,15 @@ function HelpPanel({ onClose, onOpenWidgets }: { onClose: () => void; onOpenWidg
           </section>
           <section>
             <h3>Modus wechseln</h3>
-            <p>Das Badge unter dem Titel zeigt Standard oder Jagd. Ein Klick darauf öffnet das Widget-Panel, dort wechselst du den Modus.</p>
+            <p>Das Badge unter dem Titel zeigt den aktuellen Modus. Im Widget-Panel wechselst du per Dropdown zwischen Standard, Jagd, Angler und eigenen Modi.</p>
+          </section>
+          <section>
+            <h3>Modi bearbeiten</h3>
+            <p>Neue Modi starten leer. Mit Farbe, Umbenennen und Löschen passt du sie direkt im kompakten Modusbereich an.</p>
           </section>
           <section>
             <h3>Widgets anpassen</h3>
-            <p>Im Widget-Panel kannst du Widgets ein- und ausschalten, Reihenfolge ziehen und Rubriken einklappen. Die Größe änderst du direkt im Dashboard.</p>
+            <p>Jeder Modus hat eigene Widgets und Layouts. Im Widget-Panel schaltest du Widgets ein oder aus, ziehst die Reihenfolge und klappst Rubriken ein. Die Größe änderst du direkt im Dashboard.</p>
           </section>
           <section>
             <h3>Aktualisierung</h3>
@@ -611,9 +668,14 @@ function HelpPanel({ onClose, onOpenWidgets }: { onClose: () => void; onOpenWidg
 
 function WidgetSettingsPanel({
   widgets,
+  modes,
   theme,
-  currentMode,
+  currentModeId,
   onModeChange,
+  onModeAdd,
+  onModeRename,
+  onModeColorChange,
+  onModeDelete,
   onClose,
   onMoveTo,
   onUpdate,
@@ -621,9 +683,14 @@ function WidgetSettingsPanel({
   onThemeChange
 }: {
   widgets: WidgetLayout[];
+  modes: DashboardMode[];
   theme: ThemeMode;
-  currentMode: ModeType;
-  onModeChange: (mode: ModeType) => void;
+  currentModeId: string;
+  onModeChange: (modeId: string) => void;
+  onModeAdd: () => void;
+  onModeRename: (modeId: string, name: string) => void;
+  onModeColorChange: (modeId: string, color: string) => void;
+  onModeDelete: (modeId: string) => void;
   onClose: () => void;
   onMoveTo: (id: WidgetId, targetId: WidgetId, position: DropPosition) => void;
   onUpdate: (id: WidgetId, patch: Partial<WidgetLayout>) => void;
@@ -672,19 +739,60 @@ function WidgetSettingsPanel({
           </select>
         </label>
         <div className="mode-selector-panel">
-          <span className="mode-selector-label">Modus</span>
-          <div className="mode-selector-buttons">
-            <button
-              className={`mode-selector-btn ${currentMode === "standard" ? "active" : ""}`}
-              onClick={() => onModeChange("standard")}
+          <div className="mode-selector-header">
+            <span className="mode-selector-label">Modus</span>
+            <div className="mode-header-actions">
+              <button type="button" className="mode-add-btn" onClick={onModeAdd}>
+                Neuer Modus
+              </button>
+            </div>
+          </div>
+          <div
+            className="mode-compact-row"
+            style={{ "--mode-color": modes.find((mode) => mode.id === currentModeId)?.color ?? "#5f6fca" } as React.CSSProperties}
+          >
+            <span className="mode-color-dot" aria-hidden="true" />
+            <select
+              value={currentModeId}
+              onChange={(event) => onModeChange(event.target.value)}
+              aria-label="Aktiven Modus auswählen"
             >
-              Standard
+              {modes.map((mode) => (
+                <option key={mode.id} value={mode.id}>
+                  {mode.name.trim() || "Unbenannt"}
+                </option>
+              ))}
+            </select>
+            <label className="mode-color-control" aria-label="Farbe des aktiven Modus ändern">
+              <input
+                type="color"
+                value={modes.find((mode) => mode.id === currentModeId)?.color ?? "#5f6fca"}
+                onChange={(event) => onModeColorChange(currentModeId, event.target.value)}
+              />
+            </label>
+            <button
+              type="button"
+              className="mode-icon-btn"
+              onClick={() => {
+                const activeMode = modes.find((mode) => mode.id === currentModeId);
+                if (!activeMode) return;
+                const nextName = window.prompt("Modus umbenennen", activeMode.name);
+                if (nextName !== null) onModeRename(activeMode.id, nextName);
+              }}
+              aria-label="Aktiven Modus umbenennen"
+              title="Umbenennen"
+            >
+              Aa
             </button>
             <button
-              className={`mode-selector-btn hunting ${currentMode === "hunting" ? "active" : ""}`}
-              onClick={() => onModeChange("hunting")}
+              type="button"
+              className="mode-icon-btn mode-delete-btn"
+              onClick={() => onModeDelete(currentModeId)}
+              disabled={modes.length <= 1}
+              aria-label="Aktiven Modus löschen"
+              title="Löschen"
             >
-              🦌 Jagd
+              ×
             </button>
           </div>
         </div>
@@ -1735,9 +1843,31 @@ function getUpcomingHourIndexes(times: string[], count: number) {
   return Array.from({ length: count }, (_, offset) => startIndex + offset).filter((index) => index < times.length);
 }
 
+function createModeId(modes: DashboardMode[]) {
+  let index = modes.length + 1;
+  let id = `mode-${index}`;
+  const existingIds = new Set(modes.map((mode) => mode.id));
+  while (existingIds.has(id)) {
+    index += 1;
+    id = `mode-${index}`;
+  }
+  return id;
+}
+
+function createModeName(modes: DashboardMode[]) {
+  const baseName = "Neuer Modus";
+  const existingNames = new Set(modes.map((mode) => mode.name.trim().toLowerCase()));
+  if (!existingNames.has(baseName.toLowerCase())) return baseName;
+  let index = 2;
+  while (existingNames.has(`${baseName} ${index}`.toLowerCase())) {
+    index += 1;
+  }
+  return `${baseName} ${index}`;
+}
+
 function buildGridLayouts(
   widgets: WidgetLayout[],
-  savedLayouts: DashboardSettings["standardConfig"]["gridLayout"] = {}
+  savedLayouts: ModeConfiguration["gridLayout"] = {}
 ): GridLayouts {
   return Object.fromEntries(
     Object.entries(GRID_BREAKPOINT_COLUMNS).map(([breakpoint, columns]) => [
@@ -1749,7 +1879,7 @@ function buildGridLayouts(
 
 function buildGridLayout(
   widgets: WidgetLayout[],
-  savedLayout: NonNullable<DashboardSettings["standardConfig"]["gridLayout"]>[GridBreakpoint] = {},
+  savedLayout: GridBreakpointLayouts = {},
   columns = GRID_COLUMNS
 ) {
   let cursorX = 0;
@@ -1796,7 +1926,7 @@ function buildGridLayout(
     });
 }
 
-function gridLayoutsToStorage(layouts: GridLayouts): NonNullable<DashboardSettings["standardConfig"]["gridLayout"]> {
+function gridLayoutsToStorage(layouts: GridLayouts): NonNullable<ModeConfiguration["gridLayout"]> {
   return Object.fromEntries(
     Object.entries(layouts)
       .filter(([breakpoint, layout]) => isGridBreakpoint(breakpoint) && Array.isArray(layout))
