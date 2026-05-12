@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Responsive, WidthProvider, type Layout } from "react-grid-layout/legacy";
 import { loadDashboardData, searchLocationChoices, type LocationChoice } from "./api";
@@ -122,6 +122,7 @@ function App() {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [activeGridLayout, setActiveGridLayout] = useState<Layout>([]);
   const [activeGridBreakpoint, setActiveGridBreakpoint] = useState<GridBreakpoint>("lg");
+  const refreshRequestId = useRef(0);
   const [systemPrefersDark, setSystemPrefersDark] = useState(() => {
     return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
@@ -153,10 +154,15 @@ function App() {
   }, []);
 
   const refresh = useCallback(async (searchTerm: string, selectedPlace?: LocationChoice, options?: { background?: boolean }) => {
+    const requestId = refreshRequestId.current + 1;
+    refreshRequestId.current = requestId;
+    const isLatestRequest = () => refreshRequestId.current === requestId;
     const isBackgroundRefresh = options?.background === true;
+    const normalizedSearchTerm = searchTerm.trim();
 
-    if (!searchTerm) {
+    if (!normalizedSearchTerm) {
       setError("Bitte gib eine deutsche PLZ oder einen Ort ein.");
+      if (!isBackgroundRefresh) setLoading(false);
       return;
     }
 
@@ -165,12 +171,12 @@ function App() {
       setError(null);
     }
     try {
-      const isPostalCode = /^\d{5}$/.test(searchTerm);
+      const isPostalCode = /^\d{5}$/.test(normalizedSearchTerm);
       if (!selectedPlace && !isPostalCode) {
-        const choices = await searchLocationChoices(searchTerm);
+        const choices = await searchLocationChoices(normalizedSearchTerm);
+        if (!isLatestRequest()) return;
         if (choices.length > 1) {
           setLocationChoices(choices);
-          if (!isBackgroundRefresh) setLoading(false);
           return;
         }
         if (choices.length === 0) {
@@ -179,17 +185,18 @@ function App() {
         selectedPlace = choices[0];
       }
 
-      const dashboardData = await loadDashboardData(selectedPlace?.postalCode ?? searchTerm, selectedPlace);
+      const dashboardData = await loadDashboardData(selectedPlace?.postalCode ?? normalizedSearchTerm, selectedPlace);
+      if (!isLatestRequest()) return;
       setData(dashboardData);
       setPostalInput(dashboardData.location.postalCode);
       setLocationChoices([]);
       setSettings((current) => ({ ...current, postalCode: dashboardData.location.postalCode }));
     } catch (caught) {
-      if (!isBackgroundRefresh) {
+      if (!isBackgroundRefresh && isLatestRequest()) {
         setError(formatRefreshError(caught));
       }
     } finally {
-      if (!isBackgroundRefresh) setLoading(false);
+      if (!isBackgroundRefresh && isLatestRequest()) setLoading(false);
     }
   }, []);
 
