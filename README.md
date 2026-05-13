@@ -5,12 +5,14 @@ Responsive React/TypeScript dashboard for German places and postal codes. Ortbli
 ## Features
 
 - Search by German postal code or place name, with a side panel for ambiguous postal-code results.
-- First-run help panel plus a persistent help button for returning users.
-- Editable dashboard modes with separate widget layouts, names and colors. Standard, hunting and fishing modes are prefilled, and users can add their own empty modes.
+- Current location mode that asks for browser geolocation permission and loads dashboard data for the user's live coordinates.
+- Versioned help drawer that opens once after updates with a short list of new features, plus a persistent help button for returning users.
+- Editable dashboard modes with separate widget layouts, names and colors. Standard, hunting, fishing and current-location modes are prefilled, and users can add their own empty modes.
+- Default modes can be restored from the widget panel after confirmation.
 - Configurable widgets with drag-and-drop ordering, sizes and collapsible settings sections.
-- Existing local widget settings are migrated into the newer mode format so returning users keep their layouts.
+- Existing local widget settings are migrated into the newer mode format so returning users keep their layouts. When new default modes are introduced, they are added without overwriting existing user modes.
 - Automatic refresh when the app becomes visible again and the current data is older than 15 minutes.
-- Focused weather, air, pollen, warnings, sun, moon, water level, wind and humidity data.
+- Focused weather, air, pollen, warnings, sun, moon, water level, roof rain, wind, humidity and pressure data.
 - Enhanced wind widget with gusts, Beaufort rating, direction, daily maxima and short-term trend.
 - Installable PWA metadata via web app manifest.
 
@@ -19,6 +21,7 @@ Responsive React/TypeScript dashboard for German places and postal codes. Ortbli
 - Postal code lookup: [Zippopotam.us](https://docs.zippopotam.us/)
 - Administrative postal code context: [OpenPLZ API](https://www.openplzapi.org/de/)
 - Coordinate fallback for invalid postal-code coordinates: [Open-Meteo Geocoding API](https://open-meteo.com/en/docs/geocoding-api)
+- Reverse geocoding for current-location labels: [OpenStreetMap Nominatim](https://nominatim.org/)
 - Weather and sunrise/sunset: [Open-Meteo Forecast API](https://open-meteo.com/)
 - Moon phase, position and rise/set: local calculations based on [SunCalc](https://github.com/mourner/suncalc)
 - Official DWD weather observations: [Bright Sky](https://brightsky.dev/)

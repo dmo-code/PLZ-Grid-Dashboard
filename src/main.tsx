@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Responsive, WidthProvider, type Layout } from "react-grid-layout/legacy";
-import { loadDashboardData, searchLocationChoices, type LocationChoice } from "./api";
+import { loadDashboardData, loadDashboardDataForCoordinates, searchLocationChoices, type LocationChoice } from "./api";
 import {
+  createDefaultModes,
   createEmptyModeConfig,
   loadRoofRainSettings,
   loadSettings,
@@ -39,6 +40,7 @@ const GRID_GAP: [number, number] = [14, 14];
 const GRID_ITEM_MIN_HEIGHT = 4;
 const GRID_BREAKPOINTS = { lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 };
 const GRID_BREAKPOINT_COLUMNS = { lg: 12, md: 12, sm: 6, xs: 1, xxs: 1 };
+const CURRENT_LOCATION_MODE_ID = "current-location";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -130,6 +132,7 @@ function App() {
   const currentMode = (settings.modes.find((mode) => mode.id === settings.currentModeId) ?? settings.modes[0]) as DashboardMode;
   const currentModeName = currentMode.name.trim() || "Unbenannt";
   const currentConfig = currentMode.config;
+  const isCurrentLocationMode = currentMode.id === CURRENT_LOCATION_MODE_ID;
 
   useEffect(() => {
     saveSettings(settings);
@@ -194,6 +197,14 @@ function App() {
     });
   }, []);
 
+  const restoreDefaultModes = useCallback(() => {
+    setSettings((current) => ({
+      ...current,
+      currentModeId: "standard",
+      modes: createDefaultModes()
+    }));
+  }, []);
+
   const closeHelp = useCallback(() => {
     markHelpSeen();
     setHelpOpen(false);
@@ -251,16 +262,57 @@ function App() {
     }
   }, []);
 
+  const refreshCurrentLocation = useCallback(async (options?: { background?: boolean }) => {
+    const requestId = refreshRequestId.current + 1;
+    refreshRequestId.current = requestId;
+    const isLatestRequest = () => refreshRequestId.current === requestId;
+    const isBackgroundRefresh = options?.background === true;
+
+    if (!navigator.geolocation) {
+      setError("Dein Browser unterstützt keine Standortfreigabe.");
+      return;
+    }
+
+    if (!isBackgroundRefresh) {
+      setLoading(true);
+      setError(null);
+    }
+    setLocationChoices([]);
+
+    try {
+      const position = await getCurrentPosition();
+      const dashboardData = await loadDashboardDataForCoordinates(position.coords.latitude, position.coords.longitude);
+      if (!isLatestRequest()) return;
+      setData(dashboardData);
+      const resolvedPostalCode = dashboardData.location.postalCode;
+      setPostalInput(/^\d{5}$/.test(resolvedPostalCode) ? resolvedPostalCode : dashboardData.location.place);
+    } catch (caught) {
+      if (!isBackgroundRefresh && isLatestRequest()) {
+        setError(formatRefreshError(caught));
+      }
+    } finally {
+      if (!isBackgroundRefresh && isLatestRequest()) setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
+    if (isCurrentLocationMode) {
+      void refreshCurrentLocation();
+      return;
+    }
     void refresh(settings.postalCode);
-  }, [refresh]);
+  }, [isCurrentLocationMode, refresh, refreshCurrentLocation, settings.postalCode]);
 
   useEffect(() => {
     const refreshIfStale = () => {
       if (document.visibilityState !== "visible") return;
       if (!data) return;
       if (Date.now() - new Date(data.updatedAt).getTime() < AUTO_REFRESH_MAX_AGE_MS) return;
-      void refresh(settings.postalCode, undefined, { background: true });
+      if (isCurrentLocationMode) {
+        void refreshCurrentLocation({ background: true });
+      } else {
+        void refresh(settings.postalCode, undefined, { background: true });
+      }
     };
 
     window.addEventListener("focus", refreshIfStale);
@@ -269,7 +321,7 @@ function App() {
       window.removeEventListener("focus", refreshIfStale);
       document.removeEventListener("visibilitychange", refreshIfStale);
     };
-  }, [data, refresh, settings.postalCode]);
+  }, [data, isCurrentLocationMode, refresh, refreshCurrentLocation, settings.postalCode]);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -464,6 +516,7 @@ function App() {
           onModeRename={renameMode}
           onModeColorChange={changeModeColor}
           onModeDelete={deleteMode}
+          onModeDefaultsRestore={restoreDefaultModes}
           onClose={() => setSettingsOpen(false)}
           onMoveTo={moveWidgetTo}
           onUpdate={updateWidget}
@@ -627,16 +680,30 @@ function HelpPanel({ onClose, onOpenWidgets }: { onClose: () => void; onOpenWidg
         </div>
         <div className="help-content">
           <section>
+            <h3>Neu in dieser Version</h3>
+            <ul>
+              <li>Aktueller Standort ist jetzt ein eigener Modus.</li>
+              <li>Beim Wechsel in diesen Modus fragt Ortblick nach deiner Browser-Standortfreigabe und lädt Daten für deine aktuellen Koordinaten.</li>
+              <li>Standardmodi lassen sich wiederherstellen.</li>
+              <li>Modi lassen sich direkt im Panel umbenennen.</li>
+              <li>Das Löschen eines Modus wird vorher bestätigt.</li>
+            </ul>
+          </section>
+          <section>
             <h3>Starten</h3>
             <p>Ortblick funktioniert für Orte und Postleitzahlen in Deutschland. Gib eine deutsche PLZ oder einen Ort ein und aktualisiere die Daten. Bei mehreren PLZ öffnet sich eine Auswahl.</p>
           </section>
           <section>
             <h3>Modus wechseln</h3>
-            <p>Das Badge unter dem Titel zeigt den aktuellen Modus. Im Widget-Panel wechselst du per Dropdown zwischen Standard, Jagd, Angler und eigenen Modi.</p>
+            <p>Das Badge unter dem Titel zeigt den aktuellen Modus. Im Widget-Panel wechselst du per Dropdown zwischen Standard, Jagd, Angler, aktuellem Standort und eigenen Modi.</p>
+          </section>
+          <section>
+            <h3>Aktueller Standort</h3>
+            <p>Der Modus Aktueller Standort fragt nach deiner Browser-Standortfreigabe und lädt Wetter, Umwelt- und Kontextdaten für deine aktuellen Koordinaten. Die Standortfreigabe bleibt unter Kontrolle deines Browsers.</p>
           </section>
           <section>
             <h3>Modi bearbeiten</h3>
-            <p>Neue Modi starten leer. Mit Farbe, Umbenennen und Löschen passt du sie direkt im kompakten Modusbereich an.</p>
+            <p>Neue Modi starten leer. Mit Farbe, Umbenennen, Löschen und Standardmodi wiederherstellen passt du sie direkt im kompakten Modusbereich an.</p>
           </section>
           <section>
             <h3>Widgets anpassen</h3>
@@ -676,6 +743,7 @@ function WidgetSettingsPanel({
   onModeRename,
   onModeColorChange,
   onModeDelete,
+  onModeDefaultsRestore,
   onClose,
   onMoveTo,
   onUpdate,
@@ -691,6 +759,7 @@ function WidgetSettingsPanel({
   onModeRename: (modeId: string, name: string) => void;
   onModeColorChange: (modeId: string, color: string) => void;
   onModeDelete: (modeId: string) => void;
+  onModeDefaultsRestore: () => void;
   onClose: () => void;
   onMoveTo: (id: WidgetId, targetId: WidgetId, position: DropPosition) => void;
   onUpdate: (id: WidgetId, patch: Partial<WidgetLayout>) => void;
@@ -705,7 +774,39 @@ function WidgetSettingsPanel({
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>(() =>
     loadWidgetPanelState(widgetCategories.map((category) => category.id))
   );
+  const [isRenamingMode, setIsRenamingMode] = useState(false);
+  const [modeNameDraft, setModeNameDraft] = useState("");
+  const modeNameInputRef = useRef<HTMLInputElement>(null);
+  const renameAddedModeRef = useRef(false);
+  const activeMode = modes.find((mode) => mode.id === currentModeId);
   const allWidgetsEnabled = widgets.every((widget) => widget.enabled);
+
+  useEffect(() => {
+    setModeNameDraft(activeMode?.name ?? "");
+    if (renameAddedModeRef.current) {
+      setIsRenamingMode(true);
+      renameAddedModeRef.current = false;
+    } else {
+      setIsRenamingMode(false);
+    }
+  }, [activeMode?.name, currentModeId]);
+
+  useEffect(() => {
+    if (!isRenamingMode) return;
+    modeNameInputRef.current?.focus();
+    modeNameInputRef.current?.select();
+  }, [isRenamingMode]);
+
+  const commitModeRename = () => {
+    if (!activeMode) return;
+    onModeRename(activeMode.id, modeNameDraft.trim());
+    setIsRenamingMode(false);
+  };
+
+  const cancelModeRename = () => {
+    setModeNameDraft(activeMode?.name ?? "");
+    setIsRenamingMode(false);
+  };
 
   const toggleCategory = (categoryId: string) => {
     setCollapsedCategories((current) => {
@@ -742,14 +843,32 @@ function WidgetSettingsPanel({
           <div className="mode-selector-header">
             <span className="mode-selector-label">Modus</span>
             <div className="mode-header-actions">
-              <button type="button" className="mode-add-btn" onClick={onModeAdd}>
+              <button
+                type="button"
+                className="mode-add-btn"
+                onClick={() => {
+                  renameAddedModeRef.current = true;
+                  onModeAdd();
+                }}
+              >
                 Neuer Modus
               </button>
             </div>
           </div>
+          <button
+            type="button"
+            className="mode-restore-btn"
+            onClick={() => {
+              if (window.confirm("Standard, Jagd, Angler und Aktueller Standort wiederherstellen? Eigene Modi und geänderte Modus-Layouts werden ersetzt.")) {
+                onModeDefaultsRestore();
+              }
+            }}
+          >
+            Standardmodi wiederherstellen
+          </button>
           <div
             className="mode-compact-row"
-            style={{ "--mode-color": modes.find((mode) => mode.id === currentModeId)?.color ?? "#5f6fca" } as React.CSSProperties}
+            style={{ "--mode-color": activeMode?.color ?? "#5f6fca" } as React.CSSProperties}
           >
             <span className="mode-color-dot" aria-hidden="true" />
             <select
@@ -766,19 +885,14 @@ function WidgetSettingsPanel({
             <label className="mode-color-control" aria-label="Farbe des aktiven Modus ändern">
               <input
                 type="color"
-                value={modes.find((mode) => mode.id === currentModeId)?.color ?? "#5f6fca"}
+                value={activeMode?.color ?? "#5f6fca"}
                 onChange={(event) => onModeColorChange(currentModeId, event.target.value)}
               />
             </label>
             <button
               type="button"
               className="mode-icon-btn"
-              onClick={() => {
-                const activeMode = modes.find((mode) => mode.id === currentModeId);
-                if (!activeMode) return;
-                const nextName = window.prompt("Modus umbenennen", activeMode.name);
-                if (nextName !== null) onModeRename(activeMode.id, nextName);
-              }}
+              onClick={() => setIsRenamingMode(true)}
               aria-label="Aktiven Modus umbenennen"
               title="Umbenennen"
             >
@@ -787,7 +901,13 @@ function WidgetSettingsPanel({
             <button
               type="button"
               className="mode-icon-btn mode-delete-btn"
-              onClick={() => onModeDelete(currentModeId)}
+              onClick={() => {
+                if (!activeMode) return;
+                const modeName = activeMode.name.trim() || "Unbenannt";
+                if (window.confirm(`Modus "${modeName}" wirklich löschen?`)) {
+                  onModeDelete(activeMode.id);
+                }
+              }}
               disabled={modes.length <= 1}
               aria-label="Aktiven Modus löschen"
               title="Löschen"
@@ -795,6 +915,34 @@ function WidgetSettingsPanel({
               ×
             </button>
           </div>
+          {isRenamingMode && (
+            <form
+              className="mode-name-editor"
+              onSubmit={(event) => {
+                event.preventDefault();
+                commitModeRename();
+              }}
+            >
+              <input
+                ref={modeNameInputRef}
+                value={modeNameDraft}
+                maxLength={32}
+                onChange={(event) => setModeNameDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    cancelModeRename();
+                  }
+                }}
+                aria-label="Name des aktiven Modus"
+                placeholder="Modusname"
+              />
+              <button type="submit">Speichern</button>
+              <button type="button" className="mode-editor-cancel" onClick={cancelModeRename} aria-label="Umbenennen abbrechen">
+                ×
+              </button>
+            </form>
+          )}
         </div>
         <div className="widget-panel-actions">
           <button type="button" onClick={onEnableAll} disabled={allWidgetsEnabled}>
@@ -1865,6 +2013,16 @@ function createModeName(modes: DashboardMode[]) {
   return `${baseName} ${index}`;
 }
 
+function getCurrentPosition(): Promise<GeolocationPosition> {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: false,
+      maximumAge: 10 * 60 * 1000,
+      timeout: 12_000
+    });
+  });
+}
+
 function buildGridLayouts(
   widgets: WidgetLayout[],
   savedLayouts: ModeConfiguration["gridLayout"] = {}
@@ -2123,9 +2281,23 @@ function formatCompactLiters(value: number) {
 
 function formatRefreshError(caught: unknown) {
   const message = caught instanceof Error ? caught.message : "";
+  const code = typeof caught === "object" && caught !== null && "code" in caught ? Number(caught.code) : 0;
+
+  if (code === 1) {
+    return "Standortfreigabe wurde abgelehnt.";
+  }
+  if (code === 2) {
+    return "Der aktuelle Standort konnte nicht ermittelt werden.";
+  }
+  if (code === 3) {
+    return "Die Standortsuche hat zu lange gedauert.";
+  }
 
   if (message.includes("Wetterdaten")) {
     return "Wetter konnte gerade nicht aktualisiert werden.";
+  }
+  if (message.includes("Standort")) {
+    return message;
   }
   if (message.includes("PLZ") || message.includes("Ort")) {
     return message;

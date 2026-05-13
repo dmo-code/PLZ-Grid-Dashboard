@@ -15,6 +15,7 @@ const LEGACY_STORAGE_KEY = "plz-grid-dashboard:v2";
 const WIDGET_PANEL_STATE_KEY = "plz-grid-dashboard:widget-panel:v1";
 const HELP_SEEN_KEY = "plz-grid-dashboard:help-seen:v1";
 const ROOF_RAIN_SETTINGS_KEY = "plz-grid-dashboard:roof-rain:v1";
+const CURRENT_HELP_VERSION = "2026-05-current-location-mode";
 
 // Standard Mode: Weather, place, and environment data
 export const DEFAULT_STANDARD_CONFIG: ModeConfiguration = {
@@ -68,13 +69,15 @@ const DEFAULT_MODE_COLORS = {
   standard: "#2b7058",
   hunting: "#8b4513",
   angler: "#2f89b8",
+  currentLocation: "#476f8f",
   custom: "#5f6fca"
 };
 
 const DEFAULT_MODES: DashboardMode[] = [
   { id: "standard", name: "Standard", color: DEFAULT_MODE_COLORS.standard, config: DEFAULT_STANDARD_CONFIG },
   { id: "hunting", name: "Jagd", color: DEFAULT_MODE_COLORS.hunting, config: DEFAULT_HUNTING_CONFIG },
-  { id: "angler", name: "Angler", color: DEFAULT_MODE_COLORS.angler, config: DEFAULT_STANDARD_CONFIG }
+  { id: "angler", name: "Angler", color: DEFAULT_MODE_COLORS.angler, config: DEFAULT_STANDARD_CONFIG },
+  { id: "current-location", name: "Aktueller Standort", color: DEFAULT_MODE_COLORS.currentLocation, config: DEFAULT_STANDARD_CONFIG }
 ];
 
 const widgetIds = new Set<WidgetId>(
@@ -173,7 +176,7 @@ export function saveWidgetPanelState(collapsedCategories: Record<string, boolean
 
 export function shouldOpenHelpOnStart() {
   try {
-    return !window.localStorage.getItem(STORAGE_KEY) && !window.localStorage.getItem(LEGACY_STORAGE_KEY) && window.localStorage.getItem(HELP_SEEN_KEY) !== "true";
+    return window.localStorage.getItem(HELP_SEEN_KEY) !== CURRENT_HELP_VERSION;
   } catch {
     return true;
   }
@@ -181,7 +184,7 @@ export function shouldOpenHelpOnStart() {
 
 export function markHelpSeen() {
   try {
-    window.localStorage.setItem(HELP_SEEN_KEY, "true");
+    window.localStorage.setItem(HELP_SEEN_KEY, CURRENT_HELP_VERSION);
   } catch {
     // Ignore blocked storage; the help can still be closed for the current session.
   }
@@ -254,13 +257,18 @@ export function createEmptyModeConfig(): ModeConfiguration {
   };
 }
 
+export function createDefaultModes(): DashboardMode[] {
+  return cloneDefaultModes();
+}
+
 function buildDefaultModes(standardConfig: ModeConfiguration, huntingConfig: ModeConfiguration): DashboardMode[] {
   const normalizedStandardConfig = normalizeConfig(standardConfig, DEFAULT_STANDARD_CONFIG);
   const normalizedHuntingConfig = normalizeConfig(huntingConfig, DEFAULT_HUNTING_CONFIG);
   return [
     { id: "standard", name: "Standard", color: DEFAULT_MODE_COLORS.standard, config: normalizedStandardConfig },
     { id: "hunting", name: "Jagd", color: DEFAULT_MODE_COLORS.hunting, config: normalizedHuntingConfig },
-    { id: "angler", name: "Angler", color: DEFAULT_MODE_COLORS.angler, config: cloneConfig(normalizedStandardConfig) }
+    { id: "angler", name: "Angler", color: DEFAULT_MODE_COLORS.angler, config: cloneConfig(normalizedStandardConfig) },
+    { id: "current-location", name: "Aktueller Standort", color: DEFAULT_MODE_COLORS.currentLocation, config: cloneConfig(normalizedStandardConfig) }
   ];
 }
 
@@ -306,7 +314,25 @@ function normalizeModes(value: unknown): DashboardMode[] {
       return { ...mode, id };
     });
 
-  return normalized.length > 0 ? normalized : cloneDefaultModes();
+  if (normalized.length === 0) return cloneDefaultModes();
+  if (!usedIds.has("current-location")) {
+    normalized.push(createCurrentLocationMode(normalized));
+  }
+  return normalized;
+}
+
+function createCurrentLocationMode(existingModes: DashboardMode[]): DashboardMode {
+  const sourceConfig =
+    existingModes.find((mode) => mode.id === "standard")?.config ??
+    existingModes[0]?.config ??
+    DEFAULT_STANDARD_CONFIG;
+
+  return {
+    id: "current-location",
+    name: "Aktueller Standort",
+    color: DEFAULT_MODE_COLORS.currentLocation,
+    config: cloneConfig(sourceConfig)
+  };
 }
 
 function normalizeMode(value: unknown, index: number): DashboardMode | null {
@@ -317,9 +343,17 @@ function normalizeMode(value: unknown, index: number): DashboardMode | null {
   return {
     id,
     name: normalizeModeName(candidate.name, id),
-    color: normalizeColor(candidate.color, DEFAULT_MODE_COLORS[id as keyof typeof DEFAULT_MODE_COLORS] ?? DEFAULT_MODE_COLORS.custom),
+    color: normalizeColor(candidate.color, getDefaultModeColor(id)),
     config: normalizeConfig(candidate.config, fallbackConfig)
   };
+}
+
+function getDefaultModeColor(id: string) {
+  if (id === "standard") return DEFAULT_MODE_COLORS.standard;
+  if (id === "hunting") return DEFAULT_MODE_COLORS.hunting;
+  if (id === "angler") return DEFAULT_MODE_COLORS.angler;
+  if (id === "current-location") return DEFAULT_MODE_COLORS.currentLocation;
+  return DEFAULT_MODE_COLORS.custom;
 }
 
 function normalizeModeId(value: unknown, index: number) {
@@ -346,6 +380,7 @@ function normalizeModeName(value: unknown, id: string) {
   if (id === "standard") return "Standard";
   if (id === "hunting") return "Jagd";
   if (id === "angler") return "Angler";
+  if (id === "current-location") return "Aktueller Standort";
   return "Neuer Modus";
 }
 

@@ -60,6 +60,22 @@ type OpenMeteoGeocodingResponse = {
   }>;
 };
 
+type NominatimReverseResponse = {
+  display_name?: string;
+  address?: {
+    postcode?: string;
+    city?: string;
+    town?: string;
+    village?: string;
+    municipality?: string;
+    suburb?: string;
+    county?: string;
+    state?: string;
+    country?: string;
+    country_code?: string;
+  };
+};
+
 type DwdPollenPayload = {
   last_update?: string;
   content?: Array<{
@@ -149,11 +165,27 @@ export async function loadDashboardData(searchTerm: string, selectedPlace?: Loca
   const resolvedPlace = selectedPlace ?? (/^\d{5}$/.test(searchTerm) ? null : requireLocationChoice((await searchLocationChoices(searchTerm))[0]));
   const postalCode = resolvedPlace?.postalCode ?? searchTerm;
   const location = await getLocation(postalCode, resolvedPlace);
-  const [weather, air, warnings, place, brightSky, dwdPollen, ubaAir, water] = await Promise.all([
+  return loadDashboardDataForResolvedLocation(
+    location,
+    resolvedPlace ? localityToPlaceData(resolvedPlace) : await optional(() => getOpenPlz(postalCode))
+  );
+}
+
+export async function loadDashboardDataForCoordinates(latitude: number, longitude: number): Promise<DashboardData> {
+  if (!isValidCoordinates(latitude, longitude)) {
+    throw new Error("Der aktuelle Standort konnte nicht gelesen werden.");
+  }
+
+  const { location, place } = await getLocationFromCoordinates(latitude, longitude);
+  return loadDashboardDataForResolvedLocation(location, place);
+}
+
+async function loadDashboardDataForResolvedLocation(location: LocationInfo, place: PlaceData | null): Promise<DashboardData> {
+  const [weather, air, warnings, resolvedPlace, brightSky, dwdPollen, ubaAir, water] = await Promise.all([
     getWeather(location),
     getAirQuality(location),
     getWarnings(location),
-    resolvedPlace ? Promise.resolve(localityToPlaceData(resolvedPlace)) : optional(() => getOpenPlz(postalCode)),
+    Promise.resolve(place),
     optional(() => getBrightSky(location)),
     optional(() => getDwdPollen(location)),
     optional(() => getUbaAir(location)),
@@ -162,7 +194,7 @@ export async function loadDashboardData(searchTerm: string, selectedPlace?: Loca
 
   return {
     location,
-    place,
+    place: resolvedPlace,
     weather,
     air,
     warnings,
@@ -239,6 +271,51 @@ async function getLocation(postalCode: string, locality?: OpenPlzLocality | null
     state,
     latitude: coordinates.latitude,
     longitude: coordinates.longitude
+  };
+}
+
+async function getLocationFromCoordinates(latitude: number, longitude: number): Promise<{ location: LocationInfo; place: PlaceData | null }> {
+  const params = new URLSearchParams({
+    format: "jsonv2",
+    lat: String(latitude),
+    lon: String(longitude),
+    zoom: "18",
+    addressdetails: "1",
+    "accept-language": "de"
+  });
+  const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params.toString()}`, {
+    headers: { accept: "application/json" }
+  });
+
+  const reverse = response.ok ? ((await response.json()) as NominatimReverseResponse) : null;
+  const address = reverse?.address;
+  const placeName =
+    address?.city ??
+    address?.town ??
+    address?.village ??
+    address?.municipality ??
+    address?.suburb ??
+    "Aktueller Standort";
+  const state = address?.state ?? address?.country ?? "Standort";
+  const postalCode = address?.postcode ?? "Aktueller Standort";
+
+  return {
+    location: {
+      postalCode,
+      place: placeName,
+      state,
+      latitude,
+      longitude
+    },
+    place: address?.postcode
+      ? {
+          postalCode: address.postcode,
+          name: placeName,
+          municipality: address.municipality,
+          district: address.county,
+          federalState: address.state
+        }
+      : null
   };
 }
 
