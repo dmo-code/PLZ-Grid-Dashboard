@@ -1688,6 +1688,7 @@ function SolarWidget({ data, presentation }: { data: DashboardData; presentation
   const [solarLoading, setSolarLoading] = useState(true);
   const showMetrics = presentation.rows >= 7;
   const showChart = presentation.rows >= 9;
+  const showDayStrip = presentation.rows >= 11;
   const showControls = presentation.rows >= 14;
   const showSource = presentation.rows >= 9;
 
@@ -1732,6 +1733,7 @@ function SolarWidget({ data, presentation }: { data: DashboardData; presentation
 
   const selectedHours = solar ? getUpcomingHourlyRange(data.weather.current.time, solar.time, solar.powerKw, settings.timeframeHours) : null;
   const selectedEnergyKwh = selectedHours ? sumHourlyEnergy(selectedHours.values) : null;
+  const bestSolarPhase = selectedHours ? getBestSolarPhase(selectedHours.times, selectedHours.values, 3) : null;
   const sourceText = `${formatAzimuth(settings.azimuth)} · ${settings.tilt}° · ${formatDecimal(settings.systemPeakKw, 1)} kWp`;
 
   return (
@@ -1743,9 +1745,16 @@ function SolarWidget({ data, presentation }: { data: DashboardData; presentation
       {solarError ? <p className="empty">{solarError}</p> : null}
       {showMetrics ? (
         <div className="metric-row">
-          <Metric label="Heute" value={solarLoading ? "..." : formatKwh(solar?.todayKwh ?? null)} />
           <Metric label="Jetzt" value={solarLoading ? "..." : formatKw(solar?.currentPowerKw ?? null)} />
+          <Metric label="Beste Phase" value={solarLoading ? "..." : formatSolarPhase(bestSolarPhase)} />
           <Metric label={`Peak ${settings.timeframeHours}h`} value={solarLoading ? "..." : formatKw(maxValue(selectedHours?.values ?? []))} />
+        </div>
+      ) : null}
+      {showDayStrip ? (
+        <div className="solar-day-strip">
+          <Metric label="Heute" value={solarLoading ? "..." : formatKwh(solar?.todayKwh ?? null)} />
+          <Metric label="Morgen" value={solarLoading ? "..." : formatKwh(solar?.tomorrowKwh ?? null)} />
+          <Metric label="Übermorgen" value={solarLoading ? "..." : formatKwh(solar?.dayAfterTomorrowKwh ?? null)} />
         </div>
       ) : null}
       {showChart && selectedHours ? (
@@ -2368,6 +2377,29 @@ function sumHourlyEnergy(values: Array<number | null>) {
   return numericValues.reduce((sum, value) => sum + value, 0);
 }
 
+function getBestSolarPhase(times: string[], values: Array<number | null>, windowHours: number) {
+  if (times.length < windowHours || values.length < windowHours) return null;
+  let bestStart = -1;
+  let bestEnergy = 0;
+
+  for (let index = 0; index <= values.length - windowHours; index += 1) {
+    const windowValues = values.slice(index, index + windowHours);
+    if (windowValues.some((value) => value === null)) continue;
+    const energy = (windowValues as number[]).reduce((sum, value) => sum + value, 0);
+    if (energy > bestEnergy) {
+      bestEnergy = energy;
+      bestStart = index;
+    }
+  }
+
+  if (bestStart < 0 || bestEnergy <= 0.05) return null;
+  return {
+    start: times[bestStart],
+    end: addHours(times[bestStart + windowHours - 1], 1),
+    energyKwh: bestEnergy
+  };
+}
+
 function getUpcomingHourlyRange(currentTime: string, times: string[], values: Array<number | null>, hours: number) {
   const currentIndex = times.findIndex((time) => time >= currentTime);
   const startIndex = currentIndex >= 0 ? currentIndex : 0;
@@ -2497,6 +2529,11 @@ function formatAzimuth(value: number) {
   return labels.get(value) ?? `${value}°`;
 }
 
+function formatSolarPhase(phase: { start: string; end: string; energyKwh: number } | null) {
+  if (!phase) return "n/a";
+  return `${formatShortHour(phase.start)}-${formatShortHour(phase.end)} Uhr`;
+}
+
 function formatDecimal(value: number, digits: number) {
   return new Intl.NumberFormat("de-DE", {
     maximumFractionDigits: digits,
@@ -2538,6 +2575,18 @@ function formatRefreshError(caught: unknown) {
 function formatHour(value: string) {
   if (!value) return "n/a";
   return new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+function formatShortHour(value: string) {
+  if (!value) return "n/a";
+  return new Intl.DateTimeFormat("de-DE", { hour: "2-digit" }).format(new Date(value));
+}
+
+function addHours(value: string, hours: number) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return value;
+  date.setHours(date.getHours() + hours);
+  return date.toISOString();
 }
 
 function formatForecastDay(value: string, index: number) {

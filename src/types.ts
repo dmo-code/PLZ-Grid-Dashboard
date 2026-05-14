@@ -222,6 +222,7 @@ export type SolarForecastData = {
   powerKw: Array<number | null>;
   todayKwh: number | null;
   tomorrowKwh: number | null;
+  dayAfterTomorrowKwh: number | null;
   currentPowerKw: number | null;
   peakTodayKw: number | null;
 };

@@ -511,6 +511,7 @@ export async function loadSolarForecast(location: LocationInfo, settings: SolarS
     powerKw,
     todayKwh: sumDayEnergy(time, powerKw, 0),
     tomorrowKwh: sumDayEnergy(time, powerKw, 1),
+    dayAfterTomorrowKwh: sumDayEnergy(time, powerKw, 2),
     currentPowerKw: getCurrentSolarPower(time, powerKw),
     peakTodayKw: maxDayPower(time, powerKw, 0)
   };
