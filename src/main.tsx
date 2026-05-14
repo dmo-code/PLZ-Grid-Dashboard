@@ -1792,23 +1792,45 @@ function SolarWidget({ data, presentation }: { data: DashboardData; presentation
           </label>
           <label className="solar-field">
             <span>Ausrichtung</span>
-            <select value={settings.azimuth} onChange={(event) => updateSolarSettings({ azimuth: Number(event.target.value) })}>
-              <option value={-90}>Ost</option>
-              <option value={-45}>Südost</option>
-              <option value={0}>Süd</option>
-              <option value={45}>Südwest</option>
-              <option value={90}>West</option>
-            </select>
+            <input
+              type="number"
+              min="-180"
+              max="180"
+              step="1"
+              value={settings.azimuth}
+              onChange={(event) => updateSolarSettings({ azimuth: Number(event.target.value) })}
+            />
+            <small>°</small>
           </label>
+          <div className="segmented-control solar-azimuth-presets" aria-label="Standardausrichtungen">
+            {[
+              { label: "Ost", value: -90 },
+              { label: "SO", value: -45 },
+              { label: "Süd", value: 0 },
+              { label: "SW", value: 45 },
+              { label: "West", value: 90 }
+            ].map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={settings.azimuth === option.value ? "active" : ""}
+                onClick={() => updateSolarSettings({ azimuth: option.value })}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
           <label className="solar-field">
             <span>Winkel</span>
-            <select value={settings.tilt} onChange={(event) => updateSolarSettings({ tilt: Number(event.target.value) })}>
-              {[10, 20, 30, 35, 45, 55].map((tilt) => (
-                <option key={tilt} value={tilt}>
-                  {tilt}°
-                </option>
-              ))}
-            </select>
+            <input
+              type="number"
+              min="0"
+              max="90"
+              step="1"
+              value={settings.tilt}
+              onChange={(event) => updateSolarSettings({ tilt: Number(event.target.value) })}
+            />
+            <small>°</small>
           </label>
         </div>
       ) : null}
@@ -2115,10 +2137,13 @@ function SolarPowerChart({
   if (times.length === 0 || numericValues.length < 2) return null;
   const peakValue = Math.max(...numericValues);
   const max = Math.max(peakValue * 1.18, 0.1);
+  const chartWidth = 600;
+  const chartLeft = 16;
+  const chartRight = chartWidth - 16;
   const points = values
     .map((value, index) => {
       if (value === null) return null;
-      const x = scale(index, 0, Math.max(values.length - 1, 1), 10, 290);
+      const x = scale(index, 0, Math.max(values.length - 1, 1), chartLeft, chartRight);
       const y = scale(value, 0, max, 92, 18);
       return { x, y, value, label: times[index] };
     })
@@ -2134,7 +2159,7 @@ function SolarPowerChart({
         <strong>{timeframeHours}h Solarleistung</strong>
         <span>Peak {formatKw(peakPoint?.value ?? null)}</span>
       </div>
-      <svg className="line-chart solar-chart" viewBox="0 0 300 124" role="img" aria-label={`Solarleistungsverlauf für ${timeframeHours} Stunden`}>
+      <svg className="line-chart solar-chart" viewBox={`0 0 ${chartWidth} 124`} role="img" aria-label={`Solarleistungsverlauf für ${timeframeHours} Stunden`}>
         <defs>
           <linearGradient id="solar-fill" x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%" stopColor="#d4a82d" stopOpacity="0.38" />
@@ -2142,7 +2167,7 @@ function SolarPowerChart({
           </linearGradient>
         </defs>
         {[24, 52, 80].map((y) => (
-          <line key={y} className="chart-grid" x1="10" x2="290" y1={y} y2={y} />
+          <line key={y} className="chart-grid" x1={chartLeft} x2={chartRight} y1={y} y2={y} />
         ))}
         <path className="chart-area solar-area" d={areaPath} />
         {nowMarkerX !== null ? (

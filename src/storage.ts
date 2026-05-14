@@ -517,12 +517,8 @@ function normalizeSolarSettings(settings: Partial<SolarSettings>): SolarSettings
     100,
     DEFAULT_SOLAR_SETTINGS.systemPeakKw
   );
-  const azimuth = [-90, -45, 0, 45, 90].includes(settings.azimuth ?? Number.NaN)
-    ? (settings.azimuth as number)
-    : DEFAULT_SOLAR_SETTINGS.azimuth;
-  const tilt = [10, 20, 30, 35, 45, 55].includes(settings.tilt ?? Number.NaN)
-    ? (settings.tilt as number)
-    : DEFAULT_SOLAR_SETTINGS.tilt;
+  const azimuth = clampFinite(settings.azimuth, -180, 180, DEFAULT_SOLAR_SETTINGS.azimuth);
+  const tilt = clampFinite(settings.tilt, 0, 90, DEFAULT_SOLAR_SETTINGS.tilt);
   const timeframeHours = [24, 48, 72].includes(settings.timeframeHours ?? 0)
     ? (settings.timeframeHours as 24 | 48 | 72)
     : DEFAULT_SOLAR_SETTINGS.timeframeHours;

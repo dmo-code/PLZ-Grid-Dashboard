@@ -1699,6 +1699,10 @@ h1 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.solar-azimuth-presets {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .roof-rain-field,
 .solar-field {
   display: grid;
@@ -2275,15 +2279,19 @@ h1 {
 
 .solar-chart {
   display: block;
+  width: min(100%, 600px);
   height: auto;
-  min-height: 124px;
-  aspect-ratio: 300 / 124;
+  min-height: 0;
+  margin: 0 auto;
 }
 
 .solar-chart-axis {
   display: flex;
   justify-content: space-between;
+  max-width: 600px;
   margin-top: -4px;
+  margin-right: auto;
+  margin-left: auto;
   padding: 0 6px;
   color: var(--muted);
   font-size: 0.76rem;
@@ -2296,7 +2304,7 @@ h1 {
 }
 
 .widget-narrow .solar-chart {
-  min-height: 104px;
+  width: 100%;
 }
 
 .pressure-dot {
