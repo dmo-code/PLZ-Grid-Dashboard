@@ -685,13 +685,12 @@ function HelpPanel({ onClose, onOpenWidgets }: { onClose: () => void; onOpenWidg
         </div>
         <div className="help-content">
           <section>
-            <h3>Neu in dieser Version</h3>
+            <h3>Letzte Änderungen</h3>
             <ul>
-              <li>Aktueller Standort ist jetzt ein eigener Modus.</li>
-              <li>Beim Wechsel in diesen Modus fragt Ortblick nach deiner Browser-Standortfreigabe und lädt Daten für deine aktuellen Koordinaten.</li>
-              <li>Standardmodi lassen sich wiederherstellen.</li>
-              <li>Modi lassen sich direkt im Panel umbenennen.</li>
-              <li>Das Löschen eines Modus wird vorher bestätigt.</li>
+              <li>Neues Solar-Widget mit PV-Prognose für 24, 48 und 72 Stunden.</li>
+              <li>Solar-Ertrag, aktuelle Leistung, Peak, beste Phase und 3-Tage-Ertrag werden übersichtlich angezeigt.</li>
+              <li>Anlagenleistung, Ausrichtung und Modulwinkel lassen sich frei eingeben; Standardausrichtungen bleiben als Schnellwahl verfügbar.</li>
+              <li>Der Solar-Graph bleibt beim Vergrößern und Verkleinern stabil im Widget.</li>
             </ul>
           </section>
           <section>
@@ -713,6 +712,10 @@ function HelpPanel({ onClose, onOpenWidgets }: { onClose: () => void; onOpenWidg
           <section>
             <h3>Widgets anpassen</h3>
             <p>Jeder Modus hat eigene Widgets und Layouts. Im Widget-Panel schaltest du Widgets ein oder aus, ziehst die Reihenfolge und klappst Rubriken ein. Die Größe änderst du direkt im Dashboard.</p>
+          </section>
+          <section>
+            <h3>Solar-Prognose</h3>
+            <p>Das Solar-Widget berechnet aus Wettermodell, Anlagenleistung, Ausrichtung und Modulwinkel die erwartete PV-Leistung und den Ertrag. Die Werte sind Prognosen von Open-Meteo und keine Live-Daten deiner Anlage.</p>
           </section>
           <section>
             <h3>Aktualisierung</h3>

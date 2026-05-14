@@ -16,7 +16,7 @@ const WIDGET_PANEL_STATE_KEY = "plz-grid-dashboard:widget-panel:v1";
 const HELP_SEEN_KEY = "plz-grid-dashboard:help-seen:v1";
 const ROOF_RAIN_SETTINGS_KEY = "plz-grid-dashboard:roof-rain:v1";
 const SOLAR_SETTINGS_KEY = "plz-grid-dashboard:solar:v1";
-const CURRENT_HELP_VERSION = "2026-05-current-location-mode";
+const CURRENT_HELP_VERSION = "2026-05-solar-widget";
 
 // Standard Mode: Weather, place, and environment data
 export const DEFAULT_STANDARD_CONFIG: ModeConfiguration = {
