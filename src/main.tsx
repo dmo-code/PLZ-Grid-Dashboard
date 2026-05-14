@@ -2559,7 +2559,7 @@ function formatAzimuth(value: number) {
 
 function formatSolarPhase(phase: { start: string; end: string; energyKwh: number } | null) {
   if (!phase) return "n/a";
-  return `${formatShortHour(phase.start)}-${formatShortHour(phase.end)} Uhr`;
+  return `${formatHourNumber(phase.start)}-${formatHourNumber(phase.end)} Uhr`;
 }
 
 function formatDecimal(value: number, digits: number) {
@@ -2608,6 +2608,11 @@ function formatHour(value: string) {
 function formatShortHour(value: string) {
   if (!value) return "n/a";
   return new Intl.DateTimeFormat("de-DE", { hour: "2-digit" }).format(new Date(value));
+}
+
+function formatHourNumber(value: string) {
+  if (!value) return "n/a";
+  return new Intl.DateTimeFormat("de-DE", { hour: "numeric" }).format(new Date(value)).replace(/\s*Uhr$/, "");
 }
 
 function addHours(value: string, hours: number) {
