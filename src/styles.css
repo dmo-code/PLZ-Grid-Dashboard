@@ -1617,42 +1617,55 @@ h1 {
   line-height: 1.35;
 }
 
-.roof-rain-widget {
+.roof-rain-widget,
+.solar-widget {
   display: grid;
   gap: 16px;
 }
 
-.widget-wide .roof-rain-widget {
+.widget-wide .roof-rain-widget,
+.widget-wide .solar-widget {
   grid-template-columns: minmax(0, 0.86fr) minmax(320px, 1.14fr);
   align-items: start;
 }
 
 .widget-wide .roof-rain-hero,
 .widget-wide .roof-rain-widget > .metric-row,
-.widget-wide .roof-rain-widget > .source-line {
+.widget-wide .roof-rain-widget > .source-line,
+.widget-wide .solar-hero,
+.widget-wide .solar-widget > .metric-row,
+.widget-wide .solar-widget > .source-line {
   grid-column: 1;
 }
 
-.widget-wide .roof-rain-controls {
+.widget-wide .roof-rain-controls,
+.widget-wide .solar-controls {
   grid-column: 2;
   grid-row: 1 / span 3;
 }
 
-.widget-wide .roof-rain-widget > .source-line {
+.widget-wide .roof-rain-widget > .source-line,
+.widget-wide .solar-widget > .source-line {
   align-self: end;
 }
 
-.roof-rain-hero strong {
+.roof-rain-hero strong,
+.solar-hero strong {
   font-size: clamp(2.7rem, 8vw, 4.8rem);
 }
 
-.roof-rain-controls {
+.roof-rain-controls,
+.solar-controls {
   display: grid;
   gap: 10px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: rgba(50, 126, 170, 0.07);
+}
+
+.solar-controls {
+  background: rgba(199, 161, 47, 0.1);
 }
 
 .segmented-control {
@@ -1686,7 +1699,8 @@ h1 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.roof-rain-field {
+.roof-rain-field,
+.solar-field {
   display: grid;
   grid-template-columns: minmax(72px, 0.8fr) minmax(0, 1.2fr) auto;
   gap: 8px;
@@ -1694,14 +1708,18 @@ h1 {
 }
 
 .roof-rain-field span,
-.roof-rain-field small {
+.roof-rain-field small,
+.solar-field span,
+.solar-field small {
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 800;
 }
 
 .roof-rain-field input,
-.roof-rain-field select {
+.roof-rain-field select,
+.solar-field input,
+.solar-field select {
   width: 100%;
   min-height: 38px;
   border: 1px solid var(--border);
@@ -1712,7 +1730,8 @@ h1 {
   font-weight: 800;
 }
 
-.roof-rain-widget .metric > span {
+.roof-rain-widget .metric > span,
+.solar-widget .metric > span {
   text-transform: none;
 }
 
@@ -2163,6 +2182,10 @@ h1 {
   fill: url("#pressure-fill");
 }
 
+.solar-area {
+  fill: url("#solar-fill");
+}
+
 .chart-line {
   fill: none;
   stroke-linecap: round;
@@ -2181,6 +2204,10 @@ h1 {
 
 .pressure-line {
   stroke: #7967a8;
+}
+
+.solar-line {
+  stroke: #b98713;
 }
 
 .rain-bars rect {
@@ -2224,6 +2251,36 @@ h1 {
 
 .water-dot {
   stroke: #2276a4;
+}
+
+.solar-dot {
+  stroke: #b98713;
+}
+
+.solar-chart {
+  display: block;
+  height: auto;
+  min-height: 124px;
+  aspect-ratio: 300 / 124;
+}
+
+.solar-chart-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: -4px;
+  padding: 0 6px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.widget-narrow .solar-chart-card {
+  gap: 8px;
+  padding: 10px;
+}
+
+.widget-narrow .solar-chart {
+  min-height: 104px;
 }
 
 .pressure-dot {

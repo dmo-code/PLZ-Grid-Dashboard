@@ -15,6 +15,7 @@ const LEGACY_STORAGE_KEY = "plz-grid-dashboard:v2";
 const WIDGET_PANEL_STATE_KEY = "plz-grid-dashboard:widget-panel:v1";
 const HELP_SEEN_KEY = "plz-grid-dashboard:help-seen:v1";
 const ROOF_RAIN_SETTINGS_KEY = "plz-grid-dashboard:roof-rain:v1";
+const SOLAR_SETTINGS_KEY = "plz-grid-dashboard:solar:v1";
 const CURRENT_HELP_VERSION = "2026-05-current-location-mode";
 
 // Standard Mode: Weather, place, and environment data
@@ -33,6 +34,7 @@ export const DEFAULT_STANDARD_CONFIG: ModeConfiguration = {
     { id: "moon", enabled: true, size: "mini" },
     { id: "water", enabled: true, size: "mini" },
     { id: "roofRain", enabled: true, size: "compact" },
+    { id: "solar", enabled: false, size: "compact" },
     { id: "wind", enabled: false, size: "compact" },
     { id: "humidity", enabled: false, size: "compact" },
     { id: "pressure", enabled: true, size: "compact" }
@@ -57,6 +59,7 @@ export const DEFAULT_HUNTING_CONFIG: ModeConfiguration = {
     { id: "moon", enabled: true, size: "mini" },
     { id: "water", enabled: false, size: "mini" },
     { id: "roofRain", enabled: false, size: "compact" },
+    { id: "solar", enabled: false, size: "compact" },
     { id: "wind", enabled: false, size: "compact" },
     { id: "humidity", enabled: false, size: "compact" },
     { id: "pressure", enabled: true, size: "compact" }
@@ -221,6 +224,37 @@ export function loadRoofRainSettings(): RoofRainSettings {
 
 export function saveRoofRainSettings(settings: RoofRainSettings) {
   window.localStorage.setItem(ROOF_RAIN_SETTINGS_KEY, JSON.stringify(normalizeRoofRainSettings(settings)));
+}
+
+export type SolarSettings = {
+  systemPeakKw: number;
+  systemPeakInput: string;
+  azimuth: number;
+  tilt: number;
+  timeframeHours: 24 | 48 | 72;
+};
+
+export const DEFAULT_SOLAR_SETTINGS: SolarSettings = {
+  systemPeakKw: 6,
+  systemPeakInput: "6",
+  azimuth: 0,
+  tilt: 35,
+  timeframeHours: 24
+};
+
+export function loadSolarSettings(): SolarSettings {
+  try {
+    const raw = window.localStorage.getItem(SOLAR_SETTINGS_KEY);
+    if (!raw) return DEFAULT_SOLAR_SETTINGS;
+    const parsed = JSON.parse(raw) as Partial<SolarSettings>;
+    return normalizeSolarSettings(parsed);
+  } catch {
+    return DEFAULT_SOLAR_SETTINGS;
+  }
+}
+
+export function saveSolarSettings(settings: SolarSettings) {
+  window.localStorage.setItem(SOLAR_SETTINGS_KEY, JSON.stringify(normalizeSolarSettings(settings)));
 }
 
 function normalizeConfig(config: ModeConfiguration | undefined, defaults: ModeConfiguration): ModeConfiguration {
@@ -467,6 +501,37 @@ function normalizeRoofRainSettings(settings: Partial<RoofRainSettings>): RoofRai
     areaInput,
     roofPitch,
     runoffFactor,
+    timeframeHours
+  };
+}
+
+function normalizeSolarSettings(settings: Partial<SolarSettings>): SolarSettings {
+  const systemPeakInput =
+    typeof settings.systemPeakInput === "string"
+      ? settings.systemPeakInput
+      : String(settings.systemPeakKw ?? DEFAULT_SOLAR_SETTINGS.systemPeakKw);
+  const systemPeakFromInput = systemPeakInput.trim() === "" ? 0 : Number(systemPeakInput);
+  const systemPeakKw = clampFinite(
+    Number.isFinite(systemPeakFromInput) ? systemPeakFromInput : settings.systemPeakKw,
+    0,
+    100,
+    DEFAULT_SOLAR_SETTINGS.systemPeakKw
+  );
+  const azimuth = [-90, -45, 0, 45, 90].includes(settings.azimuth ?? Number.NaN)
+    ? (settings.azimuth as number)
+    : DEFAULT_SOLAR_SETTINGS.azimuth;
+  const tilt = [10, 20, 30, 35, 45, 55].includes(settings.tilt ?? Number.NaN)
+    ? (settings.tilt as number)
+    : DEFAULT_SOLAR_SETTINGS.tilt;
+  const timeframeHours = [24, 48, 72].includes(settings.timeframeHours ?? 0)
+    ? (settings.timeframeHours as 24 | 48 | 72)
+    : DEFAULT_SOLAR_SETTINGS.timeframeHours;
+
+  return {
+    systemPeakKw,
+    systemPeakInput,
+    azimuth,
+    tilt,
     timeframeHours
   };
 }

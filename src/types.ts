@@ -11,6 +11,7 @@ export type WidgetId =
   | "ubaAir"
   | "water"
   | "roofRain"
+  | "solar"
   | "moon"
   | "wind"
   | "humidity"
@@ -213,6 +214,16 @@ export type WaterLevelData = {
     time: string;
     value: number | null;
   }>;
+};
+
+export type SolarForecastData = {
+  time: string[];
+  globalTiltedIrradiance: Array<number | null>;
+  powerKw: Array<number | null>;
+  todayKwh: number | null;
+  tomorrowKwh: number | null;
+  currentPowerKw: number | null;
+  peakTodayKw: number | null;
 };
 
 export type MoonData = {

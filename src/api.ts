@@ -5,12 +5,14 @@ import type {
   DwdPollenData,
   LocationInfo,
   PlaceData,
+  SolarForecastData,
   UbaAirData,
   WarningItem,
   WaterLevelData,
   WeatherData
 } from "./types";
 import { getMoonData } from "./moon";
+import type { SolarSettings } from "./storage";
 
 type ZippopotamusResponse = {
   "post code": string;
@@ -477,6 +479,89 @@ async function getWeather(location: LocationInfo): Promise<WeatherData> {
       windDirectionDominant: data.daily?.wind_direction_10m_dominant ?? []
     }
   };
+}
+
+export async function loadSolarForecast(location: LocationInfo, settings: SolarSettings): Promise<SolarForecastData> {
+  const params = new URLSearchParams({
+    latitude: String(location.latitude),
+    longitude: String(location.longitude),
+    timezone: "Europe/Berlin",
+    forecast_days: "4",
+    hourly: "global_tilted_irradiance",
+    tilt: String(settings.tilt),
+    azimuth: String(settings.azimuth)
+  });
+
+  const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error("Solardaten konnten nicht geladen werden.");
+  }
+
+  const data = await response.json();
+  const time = Array.isArray(data.hourly?.time) ? data.hourly.time : [];
+  const globalTiltedIrradiance = normalizeNumberArray(data.hourly?.global_tilted_irradiance, time.length);
+  const powerKw = globalTiltedIrradiance.map((value) => {
+    if (value === null) return null;
+    return settings.systemPeakKw * clamp(value / 1000, 0, 1.2);
+  });
+
+  return {
+    time,
+    globalTiltedIrradiance,
+    powerKw,
+    todayKwh: sumDayEnergy(time, powerKw, 0),
+    tomorrowKwh: sumDayEnergy(time, powerKw, 1),
+    currentPowerKw: getCurrentSolarPower(time, powerKw),
+    peakTodayKw: maxDayPower(time, powerKw, 0)
+  };
+}
+
+function normalizeNumberArray(value: unknown, length: number): Array<number | null> {
+  const raw = Array.isArray(value) ? value : [];
+  return Array.from({ length }, (_, index) => numberOrNull(raw[index]));
+}
+
+function sumDayEnergy(times: string[], values: Array<number | null>, dayOffset: number) {
+  const day = getBerlinDateKey(addDays(new Date(), dayOffset));
+  const dayValues = values.filter((value, index) => times[index]?.startsWith(day) && value !== null) as number[];
+  if (dayValues.length === 0) return null;
+  return dayValues.reduce((sum, value) => sum + value, 0);
+}
+
+function maxDayPower(times: string[], values: Array<number | null>, dayOffset: number) {
+  const day = getBerlinDateKey(addDays(new Date(), dayOffset));
+  const dayValues = values.filter((value, index) => times[index]?.startsWith(day) && value !== null) as number[];
+  return dayValues.length ? Math.max(...dayValues) : null;
+}
+
+function getCurrentSolarPower(times: string[], values: Array<number | null>) {
+  const now = Date.now();
+  let currentIndex = -1;
+  for (let index = 0; index < times.length; index += 1) {
+    const timestamp = new Date(times[index]).getTime();
+    if (Number.isFinite(timestamp) && timestamp <= now) currentIndex = index;
+  }
+  const startIndex = Math.max(currentIndex, 0);
+  return values.slice(startIndex, startIndex + 4).find((value) => value !== null) ?? null;
+}
+
+function getBerlinDateKey(date: Date) {
+  return new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Europe/Berlin",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
 async function getAirQuality(location: LocationInfo): Promise<AirQualityData> {

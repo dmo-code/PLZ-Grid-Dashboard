@@ -1,21 +1,24 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Responsive, WidthProvider, type Layout } from "react-grid-layout/legacy";
-import { loadDashboardData, loadDashboardDataForCoordinates, searchLocationChoices, type LocationChoice } from "./api";
+import { loadDashboardData, loadDashboardDataForCoordinates, loadSolarForecast, searchLocationChoices, type LocationChoice } from "./api";
 import {
   createDefaultModes,
   createEmptyModeConfig,
   loadRoofRainSettings,
+  loadSolarSettings,
   loadSettings,
   loadWidgetPanelState,
   markHelpSeen,
   saveRoofRainSettings,
+  saveSolarSettings,
   saveSettings,
   saveWidgetPanelState,
   shouldOpenHelpOnStart,
-  type RoofRainSettings
+  type RoofRainSettings,
+  type SolarSettings
 } from "./storage";
-import type { DashboardData, DashboardMode, DashboardSettings, GridBreakpoint, GridBreakpointLayouts, ModeConfiguration, ThemeMode, WidgetId, WidgetLayout, WidgetSize } from "./types";
+import type { DashboardData, DashboardMode, DashboardSettings, GridBreakpoint, GridBreakpointLayouts, ModeConfiguration, SolarForecastData, ThemeMode, WidgetId, WidgetLayout, WidgetSize } from "./types";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import "./styles.css";
@@ -58,6 +61,7 @@ const widgetMeta: Record<WidgetId, { title: string; accent: string }> = {
   moon: { title: "Mond", accent: "moon" },
   water: { title: "Pegel", accent: "water" },
   roofRain: { title: "Dachregen", accent: "water" },
+  solar: { title: "Solar", accent: "energy" },
   wind: { title: "Wind", accent: "sky" },
   humidity: { title: "Luftfeuchte", accent: "water" },
   pressure: { title: "Luftdruck", accent: "violet" }
@@ -77,6 +81,7 @@ const defaultGridSizeByWidget: Record<WidgetId, { w: number; h: number }> = {
   moon: { w: 4, h: 14 },
   water: { w: 5, h: 18 },
   roofRain: { w: 5, h: 15 },
+  solar: { w: 6, h: 16 },
   wind: { w: 4, h: 16 },
   humidity: { w: 3, h: 7 },
   pressure: { w: 4, h: 11 }
@@ -108,7 +113,7 @@ const widgetCategories = [
   { id: "context", title: "Standort & Kontext", ids: ["place"] as WidgetId[] },
   { id: "weather", title: "Wetter", ids: ["weather", "forecast", "dwdWeather", "warnings"] as WidgetId[] },
   { id: "air", title: "Luft & Umwelt", ids: ["pollen", "dwdPollen", "air", "ubaAir", "humidity", "pressure"] as WidgetId[] },
-  { id: "sunMoon", title: "Sonne & Mond", ids: ["sun", "moon"] as WidgetId[] },
+  { id: "sunMoon", title: "Sonne & Mond", ids: ["sun", "moon", "solar"] as WidgetId[] },
   { id: "waterEnergy", title: "Wasser", ids: ["water", "roofRain"] as WidgetId[] }
 ];
 
@@ -1094,6 +1099,8 @@ function renderWidget(id: WidgetId, data: DashboardData, presentation: WidgetPre
       return <WaterWidget data={data} presentation={presentation} />;
     case "roofRain":
       return <RoofRainWidget data={data} presentation={presentation} />;
+    case "solar":
+      return <SolarWidget data={data} presentation={presentation} />;
     case "wind":
       return <WindWidget data={data} />;
     case "pressure":
@@ -1674,6 +1681,138 @@ function RoofRainWidget({ data, presentation }: { data: DashboardData; presentat
   );
 }
 
+function SolarWidget({ data, presentation }: { data: DashboardData; presentation: WidgetPresentation }) {
+  const [settings, setSettings] = useState<SolarSettings>(() => loadSolarSettings());
+  const [solar, setSolar] = useState<SolarForecastData | null>(null);
+  const [solarError, setSolarError] = useState<string | null>(null);
+  const [solarLoading, setSolarLoading] = useState(true);
+  const showMetrics = presentation.rows >= 7;
+  const showChart = presentation.rows >= 9;
+  const showControls = presentation.rows >= 14;
+  const showSource = presentation.rows >= 9;
+
+  useEffect(() => {
+    let cancelled = false;
+    setSolarLoading(true);
+    setSolarError(null);
+    loadSolarForecast(data.location, settings)
+      .then((forecast) => {
+        if (cancelled) return;
+        setSolar(forecast);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSolar(null);
+        setSolarError("Solardaten sind gerade nicht verfügbar.");
+      })
+      .finally(() => {
+        if (!cancelled) setSolarLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [data.location.latitude, data.location.longitude, settings.azimuth, settings.systemPeakKw, settings.tilt]);
+
+  const updateSolarSettings = (patch: Partial<SolarSettings>) => {
+    setSettings((current) => {
+      const next = { ...current, ...patch };
+      saveSolarSettings(next);
+      return next;
+    });
+  };
+
+  const updateSystemPeakInput = (value: string) => {
+    const systemPeakKw = value.trim() === "" ? 0 : Number(value);
+    updateSolarSettings({
+      systemPeakInput: value,
+      ...(Number.isFinite(systemPeakKw) ? { systemPeakKw } : {})
+    });
+  };
+
+  const selectedHours = solar ? getUpcomingHourlyRange(data.weather.current.time, solar.time, solar.powerKw, settings.timeframeHours) : null;
+  const selectedEnergyKwh = selectedHours ? sumHourlyEnergy(selectedHours.values) : null;
+  const sourceText = `${formatAzimuth(settings.azimuth)} · ${settings.tilt}° · ${formatDecimal(settings.systemPeakKw, 1)} kWp`;
+
+  return (
+    <div className={`solar-widget solar-${presentation.density}`}>
+      <div className="hero-metric solar-hero">
+        <strong>{solarLoading ? "..." : formatKwh(selectedEnergyKwh)}</strong>
+        <span>Ertrag in den nächsten {settings.timeframeHours} Stunden</span>
+      </div>
+      {solarError ? <p className="empty">{solarError}</p> : null}
+      {showMetrics ? (
+        <div className="metric-row">
+          <Metric label="Heute" value={solarLoading ? "..." : formatKwh(solar?.todayKwh ?? null)} />
+          <Metric label="Jetzt" value={solarLoading ? "..." : formatKw(solar?.currentPowerKw ?? null)} />
+          <Metric label={`Peak ${settings.timeframeHours}h`} value={solarLoading ? "..." : formatKw(maxValue(selectedHours?.values ?? []))} />
+        </div>
+      ) : null}
+      {showChart && selectedHours ? (
+        <SolarPowerChart
+          times={selectedHours.times}
+          values={selectedHours.values}
+          timeframeHours={settings.timeframeHours}
+        />
+      ) : null}
+      {showControls ? (
+        <div className="solar-controls" onPointerDown={(event) => event.stopPropagation()} onDragStart={(event) => event.preventDefault()}>
+          <div className="segmented-control timeframe-control" aria-label="Solar-Zeitraum">
+            {[24, 48, 72].map((hours) => (
+              <button
+                key={hours}
+                type="button"
+                className={settings.timeframeHours === hours ? "active" : ""}
+                onClick={() => updateSolarSettings({ timeframeHours: hours as 24 | 48 | 72 })}
+              >
+                {hours}h
+              </button>
+            ))}
+          </div>
+          <label className="solar-field">
+            <span>Anlage</span>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              value={settings.systemPeakInput}
+              onChange={(event) => updateSystemPeakInput(event.target.value)}
+            />
+            <small>kWp</small>
+          </label>
+          <label className="solar-field">
+            <span>Ausrichtung</span>
+            <select value={settings.azimuth} onChange={(event) => updateSolarSettings({ azimuth: Number(event.target.value) })}>
+              <option value={-90}>Ost</option>
+              <option value={-45}>Südost</option>
+              <option value={0}>Süd</option>
+              <option value={45}>Südwest</option>
+              <option value={90}>West</option>
+            </select>
+          </label>
+          <label className="solar-field">
+            <span>Winkel</span>
+            <select value={settings.tilt} onChange={(event) => updateSolarSettings({ tilt: Number(event.target.value) })}>
+              {[10, 20, 30, 35, 45, 55].map((tilt) => (
+                <option key={tilt} value={tilt}>
+                  {tilt}°
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
+      {showSource ? (
+        <div className="source-line">
+          <strong>{sourceText}</strong>
+          <span>Open-Meteo GTI</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function Metric({ label, value }: { label: React.ReactNode; value: string }) {
   return (
     <div className="metric">
@@ -1954,6 +2093,69 @@ function WaterLevelChart({
   );
 }
 
+function SolarPowerChart({
+  times,
+  values,
+  timeframeHours
+}: {
+  times: string[];
+  values: Array<number | null>;
+  timeframeHours: 24 | 48 | 72;
+}) {
+  const numericValues = values.filter((value): value is number => value !== null);
+  if (times.length === 0 || numericValues.length < 2) return null;
+  const peakValue = Math.max(...numericValues);
+  const max = Math.max(peakValue * 1.18, 0.1);
+  const points = values
+    .map((value, index) => {
+      if (value === null) return null;
+      const x = scale(index, 0, Math.max(values.length - 1, 1), 10, 290);
+      const y = scale(value, 0, max, 92, 18);
+      return { x, y, value, label: times[index] };
+    })
+    .filter((point): point is ChartPoint => point !== null);
+  const peakPoint = points.reduce((peak, point) => (point.value > peak.value ? point : peak), points[0]);
+  const linePath = buildLinePath(points);
+  const areaPath = buildAreaPath(points, 96);
+  const nowMarkerX = getCurrentTimeMarkerX(times);
+
+  return (
+    <div className="chart-card solar-chart-card">
+      <div className="chart-heading">
+        <strong>{timeframeHours}h Solarleistung</strong>
+        <span>Peak {formatKw(peakPoint?.value ?? null)}</span>
+      </div>
+      <svg className="line-chart solar-chart" viewBox="0 0 300 124" role="img" aria-label={`Solarleistungsverlauf für ${timeframeHours} Stunden`}>
+        <defs>
+          <linearGradient id="solar-fill" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#d4a82d" stopOpacity="0.38" />
+            <stop offset="100%" stopColor="#d4a82d" stopOpacity="0.05" />
+          </linearGradient>
+        </defs>
+        {[24, 52, 80].map((y) => (
+          <line key={y} className="chart-grid" x1="10" x2="290" y1={y} y2={y} />
+        ))}
+        <path className="chart-area solar-area" d={areaPath} />
+        {nowMarkerX !== null ? (
+          <g className="now-marker">
+            <line x1={nowMarkerX} x2={nowMarkerX} y1="18" y2="100" />
+            <circle cx={nowMarkerX} cy="18" r="3.5" />
+            <text x={nowMarkerX} y="12" textAnchor="middle">
+              Jetzt
+            </text>
+          </g>
+        ) : null}
+        <path className="chart-line solar-line" d={linePath} />
+        {peakPoint ? <circle className="chart-dot solar-dot" cx={peakPoint.x} cy={peakPoint.y} r="4.8" /> : null}
+      </svg>
+      <div className="solar-chart-axis" aria-hidden="true">
+        <span>{formatHour(times[0])}</span>
+        <span>{formatHour(times[times.length - 1])}</span>
+      </div>
+    </div>
+  );
+}
+
 type ChartPoint = {
   x: number;
   y: number;
@@ -2160,6 +2362,12 @@ function maxValue(values: Array<number | null>) {
   return numericValues.length ? Math.max(...numericValues) : null;
 }
 
+function sumHourlyEnergy(values: Array<number | null>) {
+  const numericValues = values.filter((value): value is number => value !== null);
+  if (numericValues.length === 0) return null;
+  return numericValues.reduce((sum, value) => sum + value, 0);
+}
+
 function getUpcomingHourlyRange(currentTime: string, times: string[], values: Array<number | null>, hours: number) {
   const currentIndex = times.findIndex((time) => time >= currentTime);
   const startIndex = currentIndex >= 0 ? currentIndex : 0;
@@ -2266,6 +2474,27 @@ function formatSignedPressure(value: number | null) {
 function formatNumber(value: number | null | undefined, unit: string) {
   if (value === null || value === undefined) return "n/a";
   return `${Math.round(value)}${unit}`;
+}
+
+function formatKw(value: number | null | undefined) {
+  if (value === null || value === undefined) return "n/a";
+  return `${formatDecimal(value, value >= 10 ? 1 : 2)} kW`;
+}
+
+function formatKwh(value: number | null | undefined) {
+  if (value === null || value === undefined) return "n/a";
+  return `${formatDecimal(value, value >= 10 ? 1 : 2)} kWh`;
+}
+
+function formatAzimuth(value: number) {
+  const labels = new Map([
+    [-90, "Ost"],
+    [-45, "Südost"],
+    [0, "Süd"],
+    [45, "Südwest"],
+    [90, "West"]
+  ]);
+  return labels.get(value) ?? `${value}°`;
 }
 
 function formatDecimal(value: number, digits: number) {
